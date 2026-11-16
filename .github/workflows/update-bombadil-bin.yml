@@ -192,7 +192,10 @@ jobs:
           pkgname: bombadil-bin
           pkgbuild: ./bombadil-bin/PKGBUILD
           updpkgsums: true
-          post_process: bash /github/workspace/.github/scripts/prune-aur-workdir.sh .
+          # bombadil-bin's AUR history belongs to an unrelated, long-deleted
+          # project (toml-bombadil) whose bombadil.install would survive the
+          # prune below; drop the leftovers from that package first.
+          post_process: rm -f bombadil.install bombadil.conf cleanup.sh && bash /github/workspace/.github/scripts/prune-aur-workdir.sh .
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
