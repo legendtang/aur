@@ -1,0 +1,31 @@
+# Maintainer: czyt <czytcn@gmail.com>
+
+pkgname=bombadil-bin
+pkgver=0.7.10
+pkgrel=1
+pkgdesc="Property-based testing for web and terminal UIs"
+arch=('x86_64' 'aarch64')
+url="https://github.com/antithesishq/bombadil"
+_gh="https://github.com/antithesishq/bombadil"
+license=('MIT')
+# Fully static binaries: no DT_NEEDED entries, no program interpreter.
+depends=()
+# The AUR has an unrelated bombadil-git (toml-bombadil, a dotfile manager)
+# which also installs /usr/bin/bombadil and declares provides=('bombadil').
+provides=('bombadil')
+conflicts=('bombadil')
+options=('!strip' '!debug')
+
+source=("LICENCE::${_gh}/raw/v${pkgver}/LICENCE")
+source_x86_64=("bombadil-${pkgver}-x86_64-linux::${_gh}/releases/download/v${pkgver}/bombadil-x86_64-linux")
+source_aarch64=("bombadil-${pkgver}-aarch64-linux::${_gh}/releases/download/v${pkgver}/bombadil-aarch64-linux")
+sha256sums=('SKIP')
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+  local _bin="bombadil-${pkgver}-${CARCH}-linux"
+
+  install -Dm755 "${srcdir}/${_bin}" "${pkgdir}/usr/bin/bombadil"
+  install -Dm644 "${srcdir}/LICENCE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENCE"
+}
