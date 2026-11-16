@@ -71,25 +71,47 @@ jobs:
           jq -e --arg t "v$VERSION" '.tag_name == $t' <<< "$release" > /dev/null ||
             fail "GitHub returned an unexpected tag for v$VERSION"
 
-          BASE="https://github.com/libracoder/kiri/releases/download/v$VERSION"
-          curl --fail --silent --show-error --location \
-            --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
-            "$BASE/SHA256SUMS" --output SHA256SUMS ||
-            fail "Release v$VERSION has no SHA256SUMS"
-          [ -s SHA256SUMS ] || fail "SHA256SUMS for v$VERSION is empty"
+          # The .debs come from download.runkiri.com, the download host the
+          # release notes link to and the one place that has all of them: the
+          # GitHub release for v0.2.1 shipped no kiri .deb and no checksum file
+          # at all. Every file both hosts carry is byte-identical, so whenever
+          # the release does carry the .deb its asset digest is checked against
+          # what we downloaded, and otherwise the vendor's own SHA256SUMS-linux
+          # (the name upstream's build script writes) is the authority.
+          SITE="https://download.runkiri.com"
+          sums="$RUNNER_TEMP/SHA256SUMS-linux"
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error --location \
+                 --retry 2 --retry-all-errors --connect-timeout 15 --max-time 120 \
+                 "$SITE/SHA256SUMS-linux" --output "$sums"; then
+              break
+            fi
+            [ "$attempt" -lt 5 ] || fail "$SITE/SHA256SUMS-linux is not available"
+            sleep 15
+          done
+          [ -s "$sums" ] || fail "$SITE/SHA256SUMS-linux is empty"
 
           for arch in amd64 arm64; do
             name="kiri_${VERSION}_${arch}.deb"
-            jq -e --arg n "$name" 'any(.assets[]; .name == $n and .size > 0)' <<< "$release" > /dev/null ||
-              fail "Release v$VERSION has no $name asset"
 
-            want=$(awk -v a="$name" '$2 == a { print $1; exit }' SHA256SUMS)
-            [[ "$want" =~ ^[0-9a-f]{64}$ ]] || fail "$name is not listed in SHA256SUMS"
+            want=$(awk -v a="$name" '$2 == a { print $1; exit }' "$sums")
+            digest=$(jq -r --arg n "$name" '.assets[] | select(.name == $n) | .digest // ""' <<< "$release")
+            if [[ ! "$want" =~ ^[0-9a-f]{64}$ ]]; then
+              # SHA256SUMS-linux describes the current release only, so an older
+              # version has to be vouched for by the release asset digest.
+              [[ "$digest" == sha256:* ]] ||
+                fail "$name has no checksum: not in SHA256SUMS-linux, not in release v$VERSION"
+              want="${digest#sha256:}"
+              echo "$name is not in SHA256SUMS-linux; using its release asset digest"
+            elif [[ "$digest" == sha256:* && "${digest#sha256:}" != "$want" ]]; then
+              fail "$name: release asset digest and SHA256SUMS-linux disagree"
+            fi
 
             out="$RUNNER_TEMP/$name"
             curl --fail --silent --show-error --location \
-              --retry 3 --retry-all-errors --connect-timeout 15 --max-time 1800 \
-              "$BASE/$name" --output "$out"
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 1800 \
+              "$SITE/$name" --output "$out"
             got=$(sha256sum "$out" | cut -d' ' -f1)
             [ "$got" = "$want" ] || fail "Checksum mismatch for $name: got $got want $want"
 
