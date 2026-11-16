@@ -37,6 +37,10 @@ jobs:
         run: |
           set -euo pipefail
           PKGDIR=wowtype-bin
+          # Upstream ships one .deb per distribution. The Ubuntu 24.04 build has
+          # the lowest requirements of the three, so it is the safest to run on
+          # a rolling release.
+          DEB_SUFFIX="_ubuntu24.04_amd64.deb"
 
           if [[ -n "${INPUT_VERSION:-}" ]]; then
             VERSION="${INPUT_VERSION#v}"
@@ -53,26 +57,37 @@ jobs:
               "$RELEASE_API" --output release.json
           else
             # Upstream also publishes dictionary/language-model releases whose
-            # tags are not versions (e.g. lm-2026.11.09). Listing releases and
-            # keeping only version-tagged ones avoids latching onto those.
+            # tags are not versions (e.g. lm-2026.11.09) and that carry no .deb,
+            # so require the asset as well as a version-shaped tag.
             RELEASE_API="https://api.github.com/repos/Gloridust/WowType/releases?per_page=30"
             curl --fail --silent --show-error --location \
               --retry 3 --retry-all-errors --retry-delay 2 \
               --connect-timeout 15 --max-time 120 \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
-              "$RELEASE_API" --output release.json
-            VERSION=$(jq -r '
-              [ .[] | select(.tag_name | test("^v[0-9]+(\\.[0-9]+)+$")) | .tag_name | sub("^v"; "") ]
-              | .[]' release.json | sort -V | tail -n1)
+              "$RELEASE_API" --output releases.json
+            VERSION=$(jq -r --arg suffix "$DEB_SUFFIX" '
+              [ .[]
+                | select(.draft == false and .prerelease == false)
+                | select(.tag_name | test("^v[0-9]+(\\.[0-9]+)+$"))
+                | select(any(.assets[]; (.name | endswith($suffix)) and .state == "uploaded" and .size > 0))
+                | .tag_name | sub("^v"; "")
+              ] | .[]' releases.json | sort -V | tail -n1)
+            [[ -n "$VERSION" ]] || {
+              echo "No release carries a *${DEB_SUFFIX} asset" >&2
+              exit 1
+            }
+            # Everything below reads a single release, not the array the listing
+            # endpoint returns, so narrow the listing to the chosen release.
+            jq -e --arg tag "v${VERSION}" '.[] | select(.tag_name == $tag)' \
+              releases.json > release.json
           fi
           [[ "$VERSION" =~ ^[0-9]+([.][0-9]+)+$ ]] || {
             echo "Unsupported upstream version: $VERSION" >&2
             exit 1
           }
 
-          # The Ubuntu 24.04 build is the one with the lowest requirements.
-          DEB="wowtype_${VERSION}_ubuntu24.04_amd64.deb"
+          DEB="wowtype_${VERSION}${DEB_SUFFIX}"
           ASSETS=$(jq -r '.assets[] | select(.state == "uploaded" and .size > 0) | .name' release.json)
           grep -qx "$DEB" <<<"$ASSETS" || {
             echo "Release v${VERSION} has no ${DEB}" >&2
