@@ -128,6 +128,7 @@
 - **[yank-bin](https://aur.archlinux.org/packages/yank-bin)** - Yank：原生剪贴板历史管理器，支持自建中继做多设备同步，GTK4 界面；提供 `yank-client`（桌面端）与 `yank-server`（自托管服务端）（[源码](https://github.com/ca-x/yank)）
 - **[z-code-bin](https://aur.archlinux.org/packages/z-code-bin)** - ZCode - AI Agents combined with existing toolchains for planning, coding, review and deployment ([主页](https://zcode.z.ai))
 - **[zeron-bin](https://aur.archlinux.org/packages/zeron-bin)** - 面向 Claude Code、Codex、Cursor、Devin 等编程 agent 的原生控制平面（Rust + GPUI），支持 x86_64 和 aarch64（[官网](https://zeron.sh) · [源码](https://github.com/zeronsh/zeron)）
+- **[zigzag-bin](https://aur.archlinux.org/packages/zigzag-bin)** - 免费开源的刺绣软件：把 SVG 图案转成绣花文件（PES、DST、JEF、VP3 等），可视化调整针脚，还能通过蓝牙驱动 Brother Skitch；附命令行工具与 MCP 桥接，仅 x86_64（[官网](https://zigzag.diy) · [源码](https://github.com/simpsoka/zigzag)）
 
 ## 自动化
 
