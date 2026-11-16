@@ -65,15 +65,31 @@ jobs:
           }
           jq -e '.draft == false and .prerelease == false' <<<"$RELEASE_JSON" >/dev/null
 
-          AMD64_ASSET="Cherry-Studio-${VERSION}-amd64.deb"
-          ARM64_ASSET="Cherry-Studio-${VERSION}-arm64.deb"
-          for asset in "$AMD64_ASSET" "$ARM64_ASSET"; do
-            jq -e --arg asset "$asset" \
-              '[.assets[] | select(.name == $asset)] | length == 1' \
-              <<<"$RELEASE_JSON" >/dev/null || {
-                echo "Release $TAG does not contain exactly one $asset asset" >&2
-                exit 1
-              }
+          # The Debian assets are named after the build's own architecture
+          # labels, which changed from amd64/arm64 to linux-x64/linux-arm64 in
+          # 2.1.x. Match on what each file is for and let the PKGBUILD follow.
+          for pair in 'x86_64:x64|amd64' 'aarch64:arm64'; do
+            arch=${pair%%:*}
+            pattern=${pair#*:}
+            mapfile -t names < <(jq -r --arg v "$VERSION" '
+              .assets[].name
+              | select(startswith("Cherry-Studio-" + $v + "-") and endswith(".deb"))' \
+              <<<"$RELEASE_JSON")
+            matches=()
+            for name in "${names[@]}"; do
+              if [[ "$name" =~ -($pattern)\.deb$ ]]; then
+                matches+=("$name")
+              fi
+            done
+            if [[ "${#matches[@]}" -ne 1 ]]; then
+              echo "Release $TAG has ${#matches[@]} ${arch} .deb assets, expected one" >&2
+              printf '  %s\n' "${names[@]}" >&2
+              exit 1
+            fi
+            name="${matches[0]}"
+            # The part of the name that carries the architecture, e.g. linux-x64.
+            tag="${name#Cherry-Studio-"${VERSION}"-}"
+            echo "tag_${arch}=${tag%.deb}" >> "$GITHUB_OUTPUT"
           done
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -90,6 +106,25 @@ jobs:
 
           CURRENT_VERSION=$(sed -n 's/^pkgver=//p' cherry-studio-desktop-bin/PKGBUILD)
           [[ -n "$CURRENT_VERSION" ]] || { echo 'PKGBUILD has no pkgver' >&2; exit 1; }
+          CURRENT_REL=$(sed -n 's/^pkgrel=//p' cherry-studio-desktop-bin/PKGBUILD)
+          [[ -n "$CURRENT_REL" ]] || { echo 'PKGBUILD has no pkgrel' >&2; exit 1; }
+
+          # Compare against what AUR actually serves: a run whose publication
+          # failed after the GitHub copy moved on must be retried, not skipped
+          # as "already up to date".
+          AUR_VERSION=$(
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 120 \
+              "https://aur.archlinux.org/rpc/?v=5&type=info&arg=cherry-studio-desktop-bin" |
+              jq -er 'if .resultcount == 0 then "" else .results[0].Version end'
+          )
+          AHEAD_REF="$LATEST_VERSION-$CURRENT_REL"
+          if [[ -n "$AUR_VERSION" && "$AUR_VERSION" != "$AHEAD_REF" ]] && \
+             [ "$(printf '%s\n%s\n' "$AUR_VERSION" "$AHEAD_REF" | sort -V | head -n1)" = "$AHEAD_REF" ]; then
+            echo "AUR is ahead of the GitHub state; reconcile before publishing" >&2
+            exit 1
+          fi
 
           NEEDS_UPDATE=false
           BUMP_REL=false
@@ -97,6 +132,9 @@ jobs:
             if [[ "$FORCE_UPDATE" == true ]]; then
               NEEDS_UPDATE=true
               BUMP_REL=true
+            elif [[ -n "$AUR_VERSION" && "$AUR_VERSION" != "$CURRENT_VERSION-$CURRENT_REL" ]]; then
+              NEEDS_UPDATE=true
+              echo "Publishing the existing package state to AUR"
             fi
           else
             OLDEST_VERSION=$(printf '%s\n%s\n' "$CURRENT_VERSION" "$LATEST_VERSION" | sort -V | head -n1)
@@ -117,6 +155,8 @@ jobs:
         env:
           BUMP_REL: ${{ steps.compare.outputs.bump_rel }}
           LATEST_VERSION: ${{ steps.release.outputs.version }}
+          X86_64_TAG: ${{ steps.release.outputs.tag_x86_64 }}
+          AARCH64_TAG: ${{ steps.release.outputs.tag_aarch64 }}
         run: |
           set -euo pipefail
           cd cherry-studio-desktop-bin
@@ -129,6 +169,17 @@ jobs:
             sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
             sed -i 's/^pkgrel=.*/pkgrel=1/' PKGBUILD
           fi
+
+          # Keep the asset names in step with the release.
+          update_deb() {
+            local arch=$1 tag=$2
+            [[ -n "$tag" ]] || { echo "No ${arch} asset name from the release step" >&2; exit 1; }
+            sed -i "s|^_deb_${arch}=.*|_deb_${arch}=\"Cherry-Studio-\\\${pkgver}-${tag}.deb\"|" PKGBUILD
+            grep -qxF "_deb_${arch}=\"Cherry-Studio-\${pkgver}-${tag}.deb\"" PKGBUILD ||
+              { echo "Could not record the ${arch} asset name in the PKGBUILD" >&2; exit 1; }
+          }
+          update_deb x86_64 "$X86_64_TAG"
+          update_deb aarch64 "$AARCH64_TAG"
 
       - name: Publish to AUR
         if: steps.compare.outputs.needs_update == 'true'
@@ -154,6 +205,11 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add cherry-studio-desktop-bin/PKGBUILD
+          # Publishing the state GitHub already has changes nothing here.
+          if git diff --cached --quiet; then
+            echo "AUR publication required no GitHub metadata change."
+            exit 0
+          fi
           if [[ "$BUMP_REL" == true ]]; then
             git commit -m "Bump pkgrel for cherry-studio-desktop-bin $LATEST_VERSION"
           else

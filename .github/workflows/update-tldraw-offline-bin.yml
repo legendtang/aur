@@ -30,17 +30,30 @@ jobs:
         shell: bash
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           if [[ -n "$INPUT_VERSION" ]]; then
-            VERSION="$INPUT_VERSION"
+            VERSION="${INPUT_VERSION#v}"
           else
-            LATEST_URL=$(curl --fail --silent --show-error --location --head \
+            # releases/latest follows publish time, and the repository also
+            # publishes server-only releases (server-v1.24.1-1), so the newest
+            # desktop release has to be picked out by tag shape.
+            releases="$RUNNER_TEMP/releases.json"
+            curl --fail --silent --show-error --location \
               --retry 3 --retry-all-errors --retry-delay 2 \
               --connect-timeout 15 --max-time 120 \
-              --output /dev/null --write-out '%{url_effective}' \
-              https://github.com/tldraw/tldraw-offline/releases/latest)
-            VERSION="${LATEST_URL##*/}"
-            VERSION="${VERSION#v}"
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/tldraw/tldraw-offline/releases?per_page=50" \
+              --output "$releases"
+            VERSION=$(jq -r '
+              [ .[]
+                | select(.draft == false and .prerelease == false)
+                | .tag_name | strings
+                | select(test("^v[0-9]+(\\.[0-9]+){2}$"))
+                | sub("^v"; "") ] | .[]' "$releases" | sort -V | tail -n1)
+            [[ -n "$VERSION" ]] || { echo "No desktop release found" >&2; exit 1; }
           fi
 
           if [[ ! "$VERSION" =~ ^[0-9]+(\.[0-9]+){2}$ ]]; then
@@ -51,40 +64,102 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Verify release assets
+        id: assets
         env:
           VERSION: ${{ steps.get_version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          assets=(
-            tldraw-offline-linux-amd64.deb
-            tldraw-offline-linux-arm64.AppImage
-          )
+          set -euo pipefail
+          release="$RUNNER_TEMP/release.json"
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-all-errors --retry-delay 2 \
+            --connect-timeout 15 --max-time 120 \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/tldraw/tldraw-offline/releases/tags/v${VERSION}" \
+            --output "$release"
+          jq -e '.draft == false and .prerelease == false' "$release" >/dev/null
 
-          for asset in "${assets[@]}"; do
+          # Upstream renamed the assets from tldraw-offline-* to tldraw-office-*
+          # in 1.24.0, so pick the Linux build of each kind by architecture
+          # rather than by one exact spelling. The installed product is still
+          # called tldraw-offline either way.
+          pick() {
+            local kind=$1 pattern=$2 names name matches=()
+            mapfile -t names < <(jq -r --arg k "$kind" '.assets[].name | select(endswith($k))' "$release")
+            for name in "${names[@]}"; do
+              if [[ "$name" =~ -linux-($pattern)\.$kind$ ]]; then
+                matches+=("$name")
+              fi
+            done
+            if [[ "${#matches[@]}" -ne 1 ]]; then
+              echo "Release v${VERSION} has ${#matches[@]} Linux ${kind} assets, expected one" >&2
+              printf '  %s\n' "${names[@]}" >&2
+              exit 1
+            fi
+            printf '%s' "${matches[0]}"
+          }
+
+          deb=$(pick deb 'x86_64|amd64')
+          appimage=$(pick AppImage 'aarch64|arm64')
+          for asset in "$deb" "$appimage"; do
             curl --fail --silent --show-error --location --head \
               --retry 3 --retry-all-errors --retry-delay 2 \
               --connect-timeout 15 --max-time 120 \
               "https://github.com/tldraw/tldraw-offline/releases/download/v${VERSION}/${asset}" \
               >/dev/null
+            echo "verified $asset"
           done
+
+          echo "deb=$deb" >> "$GITHUB_OUTPUT"
+          echo "appimage=$appimage" >> "$GITHUB_OUTPUT"
 
       - name: Get current version
         id: current_version
         run: |
+          set -euo pipefail
           CURRENT=$(grep '^pkgver=' tldraw-offline-bin/PKGBUILD | cut -d'=' -f2)
+          CURRENT_REL=$(grep '^pkgrel=' tldraw-offline-bin/PKGBUILD | cut -d'=' -f2)
+          # Compare against what AUR actually serves: a run whose publication
+          # failed after the GitHub copy moved on must be retried, not skipped
+          # as "already up to date".
+          AUR_VERSION=$(
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 120 \
+              "https://aur.archlinux.org/rpc/?v=5&type=info&arg=tldraw-offline-bin" |
+              jq -er 'if .resultcount == 0 then "" else .results[0].Version end'
+          )
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "current_rel=$CURRENT_REL" >> "$GITHUB_OUTPUT"
+          echo "aur_version=$AUR_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Compare versions
         id: compare
         env:
           CURRENT_VERSION: ${{ steps.current_version.outputs.current }}
+          CURRENT_REL: ${{ steps.current_version.outputs.current_rel }}
+          AUR_VERSION: ${{ steps.current_version.outputs.aur_version }}
           FORCE_UPDATE: ${{ inputs.force }}
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
+          set -euo pipefail
+          AHEAD_REF="$VERSION-$CURRENT_REL"
+          if [ -n "$AUR_VERSION" ] && [ "$AUR_VERSION" != "$AHEAD_REF" ] && \
+             [ "$(printf '%s\n%s\n' "$AUR_VERSION" "$AHEAD_REF" | sort -V | head -n1)" = "$AHEAD_REF" ]; then
+            echo "AUR is ahead of the GitHub state; reconcile before publishing" >&2
+            exit 1
+          fi
+
           if [[ "$VERSION" == "$CURRENT_VERSION" ]]; then
             if [[ "$FORCE_UPDATE" == "true" ]]; then
               echo "needs_update=true" >> "$GITHUB_OUTPUT"
               echo "bump_rel=true" >> "$GITHUB_OUTPUT"
               echo "Forcing pkgrel bump for version $VERSION"
+            elif [ -n "$AUR_VERSION" ] && [ "$AUR_VERSION" != "$CURRENT_VERSION-$CURRENT_REL" ]; then
+              echo "needs_update=true" >> "$GITHUB_OUTPUT"
+              echo "bump_rel=false" >> "$GITHUB_OUTPUT"
+              echo "Publishing the existing package state to AUR"
             else
               echo "needs_update=false" >> "$GITHUB_OUTPUT"
               echo "Version $VERSION is already up to date"
@@ -100,7 +175,10 @@ jobs:
         env:
           BUMP_REL: ${{ steps.compare.outputs.bump_rel }}
           VERSION: ${{ steps.get_version.outputs.version }}
+          DEB_ASSET: ${{ steps.assets.outputs.deb }}
+          APPIMAGE_ASSET: ${{ steps.assets.outputs.appimage }}
         run: |
+          set -euo pipefail
           cd tldraw-offline-bin
           if [[ "$BUMP_REL" == "true" ]]; then
             CURRENT_REL=$(grep '^pkgrel=' PKGBUILD | cut -d'=' -f2)
@@ -112,6 +190,15 @@ jobs:
             sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
           fi
 
+          # Keep the release asset names in step with what is published; the
+          # local source names (and therefore the packaging) stay the same.
+          [[ -n "$DEB_ASSET" && -n "$APPIMAGE_ASSET" ]] ||
+            { echo "Missing asset names from the verify step" >&2; exit 1; }
+          sed -i "s|^source_x86_64=.*|source_x86_64=(\"\${pkgname}-\${pkgver}-x86_64.deb::https://github.com/tldraw/tldraw-offline/releases/download/v\${pkgver}/${DEB_ASSET}\")|" PKGBUILD
+          sed -i "s|^source_aarch64=.*|source_aarch64=(\"\${pkgname}-\${pkgver}-aarch64.AppImage::https://github.com/tldraw/tldraw-offline/releases/download/v\${pkgver}/${APPIMAGE_ASSET}\")|" PKGBUILD
+          grep -qF "/${DEB_ASSET}\")" PKGBUILD && grep -qF "/${APPIMAGE_ASSET}\")" PKGBUILD ||
+            { echo "Could not record the asset names in the PKGBUILD" >&2; exit 1; }
+
       - name: Commit changes
         if: steps.compare.outputs.needs_update == 'true'
         env:
@@ -121,6 +208,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add tldraw-offline-bin/PKGBUILD
+          # Publishing the state GitHub already has changes nothing here.
+          if git diff --cached --quiet; then
+            echo "AUR publication required no GitHub metadata change."
+            exit 0
+          fi
           if [[ "$BUMP_REL" == "true" ]]; then
             git commit -m "Bump pkgrel for tldraw-offline-bin $VERSION"
           else

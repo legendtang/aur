@@ -48,37 +48,95 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Verify Linux wheel assets
+        id: wheels
         env:
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           set -euo pipefail
-          wheels=(
-            "nmem_cli-${VERSION}-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
-            "nmem_cli-${VERSION}-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl"
-          )
+          json="$RUNNER_TEMP/nmem-cli-${VERSION}.json"
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-all-errors --retry-delay 2 \
+            --connect-timeout 15 --max-time 120 \
+            "https://pypi.org/pypi/nmem-cli/${VERSION}/json" --output "$json"
 
-          for wheel in "${wheels[@]}"; do
-            curl --fail --silent --show-error --location --head \
+          # Pick each wheel by what it is for rather than by its exact name:
+          # PyPI has listed these with the platform tags in either order
+          # (manylinux_2_17_x86_64.manylinux2014_x86_64 up to 0.10.110,
+          # manylinux2014_x86_64.manylinux_2_17_x86_64 after that). The tag
+          # order that PyPI currently uses is written back into the PKGBUILD
+          # below, so the file names never have to be guessed by hand.
+          for arch in x86_64 aarch64; do
+            mapfile -t matches < <(jq -r \
+              --arg prefix "nmem_cli-${VERSION}-" --arg suffix "_${arch}.whl" '
+              .urls[].filename
+              | select(startswith($prefix) and endswith($suffix))
+              | select(contains("-py3-none-manylinux"))' "$json")
+            if [ "${#matches[@]}" -ne 1 ]; then
+              echo "Expected exactly one manylinux ${arch} wheel for ${VERSION}, found ${#matches[@]}" >&2
+              printf '  %s\n' "${matches[@]}" >&2
+              exit 1
+            fi
+
+            wheel="${matches[0]}"
+            tag="${wheel#"nmem_cli-${VERSION}-py3-none-"}"
+            tag="${tag%.whl}"
+            url="https://files.pythonhosted.org/packages/py3/n/nmem-cli/${wheel}"
+            sha=$(jq -r --arg n "$wheel" '.urls[] | select(.filename == $n) | .digests.sha256' "$json")
+            [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || { echo "$wheel has no SHA-256 digest" >&2; exit 1; }
+
+            # The PKGBUILD's short URL only redirects while the file name is
+            # right, and makepkg will fetch this exact URL, so follow it.
+            curl --fail --silent --show-error --location \
               --retry 3 --retry-all-errors --retry-delay 2 \
-              --connect-timeout 15 --max-time 120 \
-              "https://files.pythonhosted.org/packages/py3/n/nmem-cli/${wheel}" >/dev/null
+              --connect-timeout 15 --max-time 600 \
+              "$url" --output "$RUNNER_TEMP/$wheel"
+            echo "$sha  $RUNNER_TEMP/$wheel" | sha256sum --check --status - ||
+              { echo "PyPI served a $wheel that does not match its digest" >&2; exit 1; }
+            unzip -l "$RUNNER_TEMP/$wheel" | grep -qE 'nmem_cli-[^/]+\.data/scripts/nmem$' ||
+              { echo "$wheel has no .data/scripts/nmem console script" >&2; exit 1; }
+            echo "verified $wheel"
+
+            echo "tag_${arch}=${tag}" >> "$GITHUB_OUTPUT"
           done
 
       - name: Get current version
         id: current_version
         run: |
+          set -euo pipefail
           CURRENT=$(grep '^pkgver=' nmem-cli/PKGBUILD | cut -d'=' -f2)
-          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          CURRENT_REL=$(grep '^pkgrel=' nmem-cli/PKGBUILD | cut -d'=' -f2)
+          # Compare against what AUR actually serves: a run whose publication
+          # failed after the GitHub copy moved on must be retried, not skipped
+          # as "already up to date".
+          AUR_VERSION=$(
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 120 \
+              "https://aur.archlinux.org/rpc/?v=5&type=info&arg=nmem-cli" |
+              jq -er 'if .resultcount == 0 then "" else .results[0].Version end'
+          )
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "current_rel=$CURRENT_REL" >> "$GITHUB_OUTPUT"
+          echo "aur_version=$AUR_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Compare versions
         id: compare
         env:
           CURRENT_VERSION: ${{ steps.current_version.outputs.current }}
+          CURRENT_REL: ${{ steps.current_version.outputs.current_rel }}
+          AUR_VERSION: ${{ steps.current_version.outputs.aur_version }}
           FORCE_UPDATE: ${{ github.event.inputs.force }}
           LATEST_VERSION: ${{ steps.get_version.outputs.version }}
           MANUAL_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -euo pipefail
+          AHEAD_REF="$LATEST_VERSION-$CURRENT_REL"
+          if [ -n "$AUR_VERSION" ] && [ "$AUR_VERSION" != "$AHEAD_REF" ] && \
+             [ "$(printf '%s\n%s\n' "$AUR_VERSION" "$AHEAD_REF" | sort -V | head -n1)" = "$AHEAD_REF" ]; then
+            echo "AUR is ahead of the GitHub state; reconcile before publishing" >&2
+            exit 1
+          fi
+
           if [[ -z "$MANUAL_VERSION" && "$LATEST_VERSION" != "$CURRENT_VERSION" ]]; then
             OLDEST_VERSION=$(printf '%s\n%s\n' "$CURRENT_VERSION" "$LATEST_VERSION" | sort -V | head -n1)
             [[ "$OLDEST_VERSION" == "$CURRENT_VERSION" ]] || {
@@ -92,6 +150,10 @@ jobs:
               echo "needs_update=true" >> $GITHUB_OUTPUT
               echo "bump_rel=true" >> $GITHUB_OUTPUT
               echo "Forcing pkgrel bump for version $LATEST_VERSION"
+            elif [ -n "$AUR_VERSION" ] && [ "$AUR_VERSION" != "$CURRENT_VERSION-$CURRENT_REL" ]; then
+              echo "needs_update=true" >> $GITHUB_OUTPUT
+              echo "bump_rel=false" >> $GITHUB_OUTPUT
+              echo "Publishing the existing package state to AUR"
             else
               echo "needs_update=false" >> $GITHUB_OUTPUT
               echo "Version $LATEST_VERSION is already up to date"
@@ -104,7 +166,11 @@ jobs:
 
       - name: Update PKGBUILD version
         if: steps.compare.outputs.needs_update == 'true'
+        env:
+          X86_64_TAG: ${{ steps.wheels.outputs.tag_x86_64 }}
+          AARCH64_TAG: ${{ steps.wheels.outputs.tag_aarch64 }}
         run: |
+          set -euo pipefail
           cd nmem-cli
           if [ "${{ steps.compare.outputs.bump_rel }}" = "true" ]; then
             CURRENT_REL=$(grep '^pkgrel=' PKGBUILD | cut -d'=' -f2)
@@ -116,12 +182,28 @@ jobs:
             sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
           fi
 
+          # Keep the wheel names in step with what PyPI actually publishes.
+          update_wheel() {
+            local arch=$1 tag=$2
+            [[ -n "$tag" ]] || { echo "No ${arch} wheel tag from the verify step" >&2; exit 1; }
+            sed -i "s|^_wheel_${arch}=.*|_wheel_${arch}=\"nmem_cli-\\\${pkgver}-py3-none-${tag}.whl\"|" PKGBUILD
+            grep -qxF "_wheel_${arch}=\"nmem_cli-\${pkgver}-py3-none-${tag}.whl\"" PKGBUILD ||
+              { echo "Could not record the ${arch} wheel name in the PKGBUILD" >&2; exit 1; }
+          }
+          update_wheel x86_64 "$X86_64_TAG"
+          update_wheel aarch64 "$AARCH64_TAG"
+
       - name: Commit changes
         if: steps.compare.outputs.needs_update == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add nmem-cli/PKGBUILD
+          # Publishing the state GitHub already has changes nothing here.
+          if git diff --cached --quiet; then
+            echo "AUR publication required no GitHub metadata change."
+            exit 0
+          fi
           if [ "${{ steps.compare.outputs.bump_rel }}" = "true" ]; then
             git commit -m "Bump pkgrel for nmem-cli ${{ steps.get_version.outputs.version }}"
           else
