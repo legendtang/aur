@@ -91,6 +91,7 @@
 - **[open-idea-server-bin](https://aur.archlinux.org/packages/open-idea-server-bin)** - OpenIDEA 服务端：OpenIDEA IDE 的无头 ACP agent 后端（[源码](https://github.com/l0ng-ai/openidea)）
 - **[open-markdown-lane-bin](https://aur.archlinux.org/packages/open-markdown-lane-bin)** - 本地优先的 Markdown 写作空间，实时渲染且保留 Markdown 源码原样，支持多文档工作区（[主页](https://github.com/AniChikage/open-markdown-lane)）
 - **[opendj-bin](https://aur.archlinux.org/packages/opendj-bin)** - openDJ：用 Rust 写的开源 DJ 混音软件，双/四唱盘、stem 分离、节拍同步效果，支持 Mixxx 的全部 DJ 控制器，安装后运行 `opendj`（[官网](https://opendj.app) · [源码](https://github.com/sebastian-beca/opendj)）
+- **[openwren-bin](https://aur.archlinux.org/packages/openwren-bin)** - 注重隐私的开源邮件客户端：支持 Gmail 与任意 IMAP 账号，邮件加密保存在本机，自动去除追踪像素并标注可疑邮件；仅 x86_64（[官网](https://openwren.app) · [源码](https://github.com/VinceGHER/openwren)）
 - **[pdf-math-reader-bin](https://aur.archlinux.org/packages/pdf-math-reader-bin)** - 实时翻译阅读科学文献，支持 PDF 公式与图表（[源码](https://github.com/PDFMathTranslate/PDFMathReader)）
 - **[pluely-bin](https://aur.archlinux.org/packages/pluely-bin)** - Privacy-first AI assistant for meetings, interviews, and conversations ([官网](https://pluely.com) · [源码](https://github.com/iamsrikanthnani/pluely))
 - **[pig-bin](https://aur.archlinux.org/packages/pig-bin)** - PiG (Pi in Go)：Pi 编程 agent 的 Go 移植版，静态双架构二进制（[官网](https://pi-in-go.dev) · [源码](https://github.com/MichaelKinsy/PiG)）
