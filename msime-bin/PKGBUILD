@@ -1,13 +1,20 @@
 # Maintainer: czyt <czytcn@gmail.com>
 pkgname=msime-bin
-pkgver=0.16.1
+pkgver=0.17.0
 pkgrel=1
 pkgdesc="MSIME (Metasequoia) Linux input method: IBus host, desktop tools and a Fcitx5 addon"
 arch=('x86_64' 'aarch64')
 url="https://github.com/metasequoiaime/msime"
 license=('GPL-3.0-only')
-depends=('alsa-lib' 'cairo' 'dbus' 'fcitx5' 'gcc-libs' 'gdk-pixbuf2' 'glib2' 'gtk3' 'ibus' 'libsoup3' 'libx11' 'libxext' 'libxfixes' 'libxkbcommon' 'libxrandr' 'pango' 'procps-ng' 'python' 'wayland' 'webkit2gtk-4.1')
+# Both input method frameworks are optional, and deliberately not installed
+# together: the Fcitx5 addon is only ever loaded by Fcitx5, and the IBus host
+# (which links libibus, a library that comes with the ibus package) is only ever
+# started by ibus-daemon. Installing this package with Fcitx5 therefore pulls in
+# no part of IBus.
+depends=('alsa-lib' 'cairo' 'dbus' 'gcc-libs' 'gdk-pixbuf2' 'glib2' 'gtk3' 'gtk4' 'libsoup3' 'libx11' 'libxext' 'libxfixes' 'libxkbcommon' 'libxrandr' 'pango' 'procps-ng' 'python' 'wayland' 'webkit2gtk-4.1')
 optdepends=(
+    'fcitx5: type with MSIME inside Fcitx5'
+    'ibus: type with MSIME inside IBus (also brings the libibus the IBus host links)'
     'python-websockets: cloud candidates and online providers'
     'pipewire: audio capture for the local voice provider (alternatively pulseaudio-utils or alsa-utils)'
     'quickshell: bar status widget for Omarchy/Quickshell sessions'

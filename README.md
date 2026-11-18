@@ -83,7 +83,7 @@
 - **[mister-download-manager-bin](https://aur.archlinux.org/packages/mister-download-manager-bin)** - Mister Download Manager：用 Rust 从零编写的开源下载管理器，多连接加速、断点续传、浏览器接管、视频与种子下载，附带命令行与 MCP 接口（[官网](https://misterdownloadmanager.com) · [源码](https://github.com/anefzaoui/misterdownloadmanager)）
 - **[modbux-bin](https://aur.archlinux.org/packages/modbux-bin)** - Free open-source Modbus client GUI and server simulator for Modbus TCP, RTU and RTU over TCP ([主页](https://github.com/ploxc/modbux))
 - **[mole-cli-bin](https://aur.archlinux.org/packages/mole-cli-bin)** - 开源 Linux 桌面清理与优化 CLI，支持 apt/Snap/Flatpak/容器缓存与开发工具残留清理，命令为 `mo`（[主页](https://github.com/tw93/Mole)）
-- **[msime-bin](https://aur.archlinux.org/packages/msime-bin)** - 水杉输入法 Linux 版：IBus 宿主、Fcitx5 插件与桌面工具齐备，支持全拼、双拼、五笔、粤拼、注音、日文、韩文、藏文等方案；x86_64 与 aarch64 均可用（[官网](https://msime.app) · [源码](https://github.com/metasequoiaime/msime)）
+- **[msime-bin](https://aur.archlinux.org/packages/msime-bin)** - 水杉输入法 Linux 版：IBus 宿主、Fcitx5 插件与桌面工具齐备，支持全拼、双拼、五笔、粤拼、注音、日文、韩文、藏文等方案；Fcitx5 与 IBus 按你现有的挑一个即可，两者都只是可选依赖，不会强行安装另一个；x86_64 与 aarch64 均可用（[官网](https://msime.app) · [源码](https://github.com/metasequoiaime/msime)）
 - **[neoko-terminal-desktop-bin](https://aur.archlinux.org/packages/neoko-terminal-desktop-bin)** - 小橘终端桌面客户端：本地终端 + Relay 配对远程连接，GTK 4，凭据存系统钥匙环（[主页](https://github.com/lazycat-contrib/lazycat-neko-webshell)）
 - **[nmem-cli](https://aur.archlinux.org/packages/nmem-cli)** - CLI and TUI for Nowledge Mem - AI memory management ([主页](https://mem.nowledge.co))
 - **[nowledge-mem-bin](https://aur.archlinux.org/packages/nowledge-mem-bin)** - Desktop app for Nowledge Mem - AI memory and context management ([主页](https://mem.nowledge.co))
