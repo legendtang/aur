@@ -30,6 +30,9 @@
 - **[dbx-bin](https://aur.archlinux.org/packages/dbx-bin)** - Open-source, lightweight, cross-platform database client (Tauri 2) ([主页](https://github.com/t8y2/dbx))
 - **[dbine-bin](https://aur.archlinux.org/packages/dbine-bin)** - DBine：支持 130+ SQL/NoSQL 数据库与云服务的桌面管理器，含笔记本、schema 对比、本地 AI 助手与 MCP server（[官网](https://dbine.com) · [源码](https://github.com/addlayer-io/dbine)）
 - **[deepseek-harness-desktop-bin](https://aur.archlinux.org/packages/deepseek-harness-desktop-bin)** - DeepSeek Harness 的 Electron 桌面外壳，内置 dsh 运行时（[主页](https://deepseek-harness.github.io/deepseek-harness/) · [发布](https://github.com/ZacharyZhang-NY/deepseek-harness)）
+- **[dffy-bin](https://aur.archlinux.org/packages/dffy-bin)** - 终端里给 git 用的快速 diff 查看器，为超大仓库设计：文件树、分栏或统一视图、语法感知 diff、watch 模式、JSON 输出，以及给编码 agent 用的 MCP server；可装渲染插件把 Markdown 与 Mermaid 直接画出来（[源码](https://github.com/amalucelli/dffy)）
+- **[dffy-render-markdown-bin](https://aur.archlinux.org/packages/dffy-render-markdown-bin)** - dffy 的可选渲染插件：把 Markdown 排成渲染后的文本，标题、列表、引用、表格、链接都还原，Mermaid 代码块直接画成图（[源码](https://github.com/amalucelli/dffy)）
+- **[dffy-render-mermaid-bin](https://aur.archlinux.org/packages/dffy-render-mermaid-bin)** - dffy 的可选渲染插件：用制表符字符画出 Mermaid 流程图和时序图，改动在 diff 里直接看得出图形变化（[源码](https://github.com/amalucelli/dffy)）
 - **[delta-app-bin](https://aur.archlinux.org/packages/delta-app-bin)** - Delta：AI 原生代码编辑器，自带 xkbcommon/xcb 等依赖库，双架构（[官网](https://delta.dev)）
 - **[dim-agent-bin](https://aur.archlinux.org/packages/dim-agent-bin)** - 一个可在桌面、终端、脚本和编辑器中运行的本地 agent 运行时，模型任你选择、随项目成长（[官网](https://dimagent.com)）
 - **[docker-sbx-bin](https://aur.archlinux.org/packages/docker-sbx-bin)** - Docker Sandboxes：在隔离的 microVM 沙箱中运行 AI 编程代理（[官网](https://www.docker.com/products/docker-sandboxes/) · [发布](https://github.com/docker/sbx-releases)）

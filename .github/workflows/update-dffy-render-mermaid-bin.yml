@@ -1,0 +1,265 @@
+name: Update dffy-render-mermaid-bin Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number (e.g., 0.2.1). Leave empty to use the latest stable GitHub release."
+        required: false
+        type: string
+      force:
+        description: "Force a packaging-only pkgrel bump"
+        required: false
+        default: false
+        type: boolean
+      allow_downgrade:
+        description: "Allow an explicitly requested version downgrade"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "47 */12 * * *"
+
+concurrency:
+  group: aur-dffy-render-mermaid-bin
+  cancel-in-progress: false
+
+jobs:
+  update-pkgbuild:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve and verify GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          fail() { echo "$1" >&2; exit 1; }
+
+          if [[ -n "$INPUT_VERSION" ]]; then
+            VERSION="${INPUT_VERSION#v}"
+            API_URL="https://api.github.com/repos/amalucelli/dffy/releases/tags/v${VERSION}"
+          else
+            API_URL='https://api.github.com/repos/amalucelli/dffy/releases/latest'
+          fi
+
+          release=$(curl --fail --silent --show-error --location \
+            --retry 3 --retry-all-errors --retry-delay 2 \
+            --connect-timeout 15 --max-time 120 \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$API_URL") || fail "Could not read the release from GitHub"
+
+          TAG=$(jq -er '.tag_name | strings | select(length > 1)' <<<"$release") ||
+            fail "Release has no tag name"
+          VERSION="${TAG#v}"
+          [[ "$TAG" == "v${VERSION}" && "$VERSION" =~ ^[0-9]+([.][0-9]+)+$ ]] ||
+            fail "Unsupported release tag: $TAG"
+          jq -e '.draft == false and .prerelease == false' <<<"$release" >/dev/null ||
+            fail "Release $TAG is a draft or a prerelease"
+
+          # The release also carries the other renderer plugin and the macOS
+          # builds. This package needs its own two Linux archives by exact name,
+          # so a rename upstream is reported here instead of published as a
+          # source URL that no longer resolves.
+          ASSET_BASE='dffy-render-mermaid'
+          BIN='dffy-render-mermaid'
+          for arch in amd64 arm64; do
+            name="${ASSET_BASE}_linux_${arch}.tar.gz"
+            digest=$(jq -r --arg n "$name" '.assets[] | select(.name == $n) | .digest // ""' <<<"$release")
+            [[ "$digest" == sha256:* ]] || fail "Release $TAG does not carry $name"
+          done
+
+          work="$RUNNER_TEMP/dffy"
+          rm -rf "$work"
+          mkdir -p "$work"
+
+          for name in checksums.txt "${ASSET_BASE}_linux_amd64.tar.gz" "${ASSET_BASE}_linux_arm64.tar.gz"; do
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 600 \
+              "https://github.com/amalucelli/dffy/releases/download/v${VERSION}/${name}" \
+              --output "$work/$name"
+          done
+
+          for arch in amd64 arm64; do
+            name="${ASSET_BASE}_linux_${arch}.tar.gz"
+            got=$(sha256sum "$work/$name" | cut -d' ' -f1)
+            want=$(jq -r --arg n "$name" '.assets[] | select(.name == $n) | .digest' <<<"$release")
+            [ "$got" = "${want#sha256:}" ] ||
+              fail "Checksum mismatch for $name: got $got want ${want#sha256:}"
+          done
+
+          # The release's own checksum list is upstream's statement of what the
+          # files are; entries for the builds this package does not use are
+          # skipped, and a missing entry for ours would fail.
+          ( cd "$work" && sha256sum --check --ignore-missing --status checksums.txt ) ||
+            fail "The Linux archives do not match checksums.txt"
+
+          # Each archive holds the program, the licence and the README, and each
+          # has to be the machine type its name promises.
+          for arch in amd64 arm64; do
+            name="${ASSET_BASE}_linux_${arch}.tar.gz"
+            case "$arch" in
+              amd64) machine=X86-64 ;;
+              arm64) machine=AArch64 ;;
+            esac
+
+            # Read the listing in full first: piping into `grep -q` would kill
+            # tar with SIGPIPE, which pipefail then reports as a failure.
+            listing=$(tar -tzf "$work/$name")
+            for member in "$BIN" LICENSE README.md; do
+              grep -qxF "$member" <<<"$listing" ||
+                fail "$name does not contain $member"
+            done
+
+            # Unpack each build into its own directory: both archives hold a
+            # file with the same name, and the amd64 one is run below.
+            unpacked="$work/$arch"
+            rm -rf "$unpacked"
+            mkdir -p "$unpacked"
+            tar -xzf "$work/$name" -C "$unpacked" "$BIN"
+
+            # Read the header in full first, for the same SIGPIPE reason.
+            # LC_ALL=C keeps the header readable on any runner locale.
+            header=$(LC_ALL=C readelf -h "$unpacked/$BIN")
+            grep -q "Machine:.*${machine}" <<<"$header" ||
+              fail "$name carries the wrong machine type, expected $machine"
+          done
+
+          # Run the amd64 build: it has to answer with the version the release
+          # claims to be.
+          reported=$("$work/amd64/$BIN" --version)
+          [ "$reported" = "${BIN} ${VERSION}" ] ||
+            fail "The archived $BIN reports '$reported', expected '${BIN} ${VERSION}'"
+
+          echo "verified ${BIN} $VERSION for amd64 and arm64"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compare release with PKGBUILD
+        id: compare
+        env:
+          ALLOW_DOWNGRADE: ${{ inputs.allow_downgrade }}
+          FORCE_UPDATE: ${{ inputs.force }}
+          LATEST_VERSION: ${{ steps.release.outputs.version }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          CURRENT_VERSION=$(sed -n 's/^pkgver=//p' dffy-render-mermaid-bin/PKGBUILD)
+          [[ -n "$CURRENT_VERSION" ]] || { echo 'PKGBUILD has no pkgver' >&2; exit 1; }
+          CURRENT_REL=$(sed -n 's/^pkgrel=//p' dffy-render-mermaid-bin/PKGBUILD)
+          [[ -n "$CURRENT_REL" ]] || { echo 'PKGBUILD has no pkgrel' >&2; exit 1; }
+
+          # Compare against what AUR actually serves: a run whose publication
+          # failed after the GitHub copy moved on must be retried, not skipped
+          # as "already up to date".
+          AUR_VERSION=$(
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 120 \
+              "https://aur.archlinux.org/rpc/?v=5&type=info&arg=dffy-render-mermaid-bin" |
+              jq -er 'if .resultcount == 0 then "" else .results[0].Version end'
+          )
+          AHEAD_REF="$LATEST_VERSION-$CURRENT_REL"
+          if [[ -n "$AUR_VERSION" && "$AUR_VERSION" != "$AHEAD_REF" ]] && \
+             [ "$(printf '%s\n%s\n' "$AUR_VERSION" "$AHEAD_REF" | sort -V | head -n1)" = "$AHEAD_REF" ]; then
+            echo "AUR is ahead of the GitHub state; reconcile before publishing" >&2
+            exit 1
+          fi
+
+          NEEDS_UPDATE=false
+          BUMP_REL=false
+          if [[ "$LATEST_VERSION" == "$CURRENT_VERSION" ]]; then
+            if [[ "$FORCE_UPDATE" == true ]]; then
+              NEEDS_UPDATE=true
+              BUMP_REL=true
+            elif [[ "$AUR_VERSION" != "$CURRENT_VERSION-$CURRENT_REL" ]]; then
+              # Also the first publication, when AUR has no such package yet.
+              NEEDS_UPDATE=true
+              echo "Publishing the existing package state to AUR"
+            fi
+          else
+            OLDEST_VERSION=$(printf '%s\n%s\n' "$CURRENT_VERSION" "$LATEST_VERSION" | sort -V | head -n1)
+            if [[ "$OLDEST_VERSION" != "$CURRENT_VERSION" ]]; then
+              [[ -n "$REQUESTED_VERSION" && "$ALLOW_DOWNGRADE" == true ]] || {
+                echo "Refusing downgrade from $CURRENT_VERSION to $LATEST_VERSION" >&2
+                exit 1
+              }
+            fi
+            NEEDS_UPDATE=true
+          fi
+
+          echo "needs_update=$NEEDS_UPDATE" >> "$GITHUB_OUTPUT"
+          echo "bump_rel=$BUMP_REL" >> "$GITHUB_OUTPUT"
+
+      - name: Update PKGBUILD
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          BUMP_REL: ${{ steps.compare.outputs.bump_rel }}
+          LATEST_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd dffy-render-mermaid-bin
+
+          # The download URLs and the local source names follow ${pkgver}, so
+          # the version line is the only thing that has to change.
+          if [[ "$BUMP_REL" == true ]]; then
+            CURRENT_REL=$(sed -n 's/^pkgrel=//p' PKGBUILD)
+            [[ "$CURRENT_REL" =~ ^[0-9]+$ ]] || { echo "Invalid pkgrel: $CURRENT_REL" >&2; exit 1; }
+            sed -i "s/^pkgrel=.*/pkgrel=$((CURRENT_REL + 1))/" PKGBUILD
+          else
+            sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
+            sed -i 's/^pkgrel=.*/pkgrel=1/' PKGBUILD
+          fi
+
+          grep -qxF "pkgver=$LATEST_VERSION" PKGBUILD || {
+            echo "Failed to write pkgver=$LATEST_VERSION" >&2
+            exit 1
+          }
+
+      - name: Publish to AUR
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
+        with:
+          pkgname: dffy-render-mermaid-bin
+          pkgbuild: ./dffy-render-mermaid-bin/PKGBUILD
+          updpkgsums: true
+          post_process: bash /github/workspace/.github/scripts/prune-aur-workdir.sh .
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: ${{ steps.compare.outputs.bump_rel == 'true' && format('Bump pkgrel for version {0}', steps.release.outputs.version) || format('Update to version {0}', steps.release.outputs.version) }}
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+
+      - name: Commit successfully published version to GitHub
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          BUMP_REL: ${{ steps.compare.outputs.bump_rel }}
+          LATEST_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add dffy-render-mermaid-bin/PKGBUILD
+          # Publishing the state GitHub already has changes nothing here.
+          if git diff --cached --quiet; then
+            echo "AUR publication required no GitHub metadata change."
+            exit 0
+          fi
+          if [[ "$BUMP_REL" == true ]]; then
+            git commit -m "Bump pkgrel for dffy-render-mermaid-bin $LATEST_VERSION"
+          else
+            git commit -m "Update dffy-render-mermaid-bin to version $LATEST_VERSION"
+          fi
+          git pull --rebase origin main
+          git push
