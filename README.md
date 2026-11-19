@@ -66,6 +66,7 @@
 - **[kiri-desktop-lite-bin](https://aur.archlinux.org/packages/kiri-desktop-lite-bin)** - Kiri 容器运行时纯引擎版：Docker API on `/run/kiri/docker.sock`，无 GUI 无自带 CLI（[官网](https://runkiri.com) · [源码](https://github.com/libracoder/kiri)）
 - **[kudu-app-bin](https://aur.archlinux.org/packages/kudu-app-bin)** - Free Windows, Mac and Linux cleaner, scanner, and more. ([主页](https://github.com/AdventDevInc/kudu))
 - **[lig-bin](https://aur.archlinux.org/packages/lig-bin)** - 终端里的 IDE 式自动补全：边输入边在光标下方弹出子命令、选项、分支、包名与路径提示，支持 zsh、bash、fish；静态二进制，装完运行 `lig install` 接入你的 shell（[主页](https://github.com/KevenGoncalves/lig)）
+- **[linger-bin](https://aur.archlinux.org/packages/linger-bin)** - Linger：跑在本机上的个人 AI agent，内置本地模型，把邮件、聊天和会议变成共享记忆；首次启动会自己装好 Postgres、Node 等运行组件，Electron 桌面应用，仅 x86_64（[源码](https://github.com/simplexai-labs/linger)）
 - **[little-snitch-bin](https://aur.archlinux.org/packages/little-snitch-bin)** - Little Snitch informs you whenever a program attempts to establish an outgoing Internet connection ([主页](https://obdev.at/products/littlesnitch))
 - **[llmux-bin](https://aur.archlinux.org/packages/llmux-bin)** - Multi-provider, multi-account Claude proxy with automatic quota-based rotation ([主页](https://github.com/2lab-ai/llmux))
 - **[lnav-bin](https://aur.archlinux.org/packages/lnav-bin)** - 终端日志查看与分析工具，支持多文件合并、语法高亮和 SQL 查询；使用上游静态 musl 二进制，支持 x86_64 和 aarch64（[主页](https://github.com/tstack/lnav)）
