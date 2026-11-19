@@ -192,7 +192,7 @@ jobs:
           )
           AHEAD_REF="$LATEST_VERSION-$CURRENT_REL"
           if [[ -n "$AUR_VERSION" && "$AUR_VERSION" != "$AHEAD_REF" ]] && \
-             [ "$(printf '%s\n%s\n' "$AUR_VERSION" "$AHEAD_REF" | sort -V | head -n1)" = "$AHEAD_REF" ]; then
+             [ "$(printf '%s\n%s\n' "$AUR_VERSION" "$AHEAD_REF" | sort -V | sed -n '1p')" = "$AHEAD_REF" ]; then
             echo "AUR is ahead of the GitHub state; reconcile before publishing" >&2
             exit 1
           fi
@@ -209,7 +209,7 @@ jobs:
               echo "Publishing the existing package state to AUR"
             fi
           else
-            OLDEST_VERSION=$(printf '%s\n%s\n' "$CURRENT_VERSION" "$LATEST_VERSION" | sort -V | head -n1)
+            OLDEST_VERSION=$(printf '%s\n%s\n' "$CURRENT_VERSION" "$LATEST_VERSION" | sort -V | sed -n '1p')
             if [[ "$OLDEST_VERSION" != "$CURRENT_VERSION" ]]; then
               [[ -n "$REQUESTED_VERSION" && "$ALLOW_DOWNGRADE" == true ]] || {
                 echo "Refusing downgrade from $CURRENT_VERSION to $LATEST_VERSION" >&2
