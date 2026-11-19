@@ -62,6 +62,7 @@
 - **[herdr-app-desktop-bin](https://aur.archlinux.org/packages/herdr-app-desktop-bin)** - Herdr 桌面应用：让终端与编码代理持续运行的本地工作台（[官网](https://herdr.dev) · [源码](https://github.com/herdrdev/herdr-app) · [说明](herdr-app-desktop-bin/README.md)）
 - **[herdr-bin](https://aur.archlinux.org/packages/herdr-bin)** - Supervise multiple coding agents in one terminal ([主页](https://github.com/ogulcancelik/herdr))
 - **[iris-screenshot-bin](https://aur.archlinux.org/packages/iris-screenshot-bin)** - Screenshots of live websites. Minimal interface, powerful engine. ([主页](https://github.com/brijr/iris))
+- **[kander-bin](https://aur.archlinux.org/packages/kander-bin)** - Kander：给多个 AI 编码 agent 排班的看板，规则驱动、带独立评审关卡，用 git worktree 隔离每个 agent 的工作区，静态 Go 二进制，x86_64 与 aarch64（[源码](https://github.com/dualface/kander)）
 - **[karing-bin](https://aur.archlinux.org/packages/karing-bin)** - Simple & Powerful proxy utility ([主页](https://github.com/KaringX/karing))
 - **[kero-bin](https://aur.archlinux.org/packages/kero-bin)** - 为 agent 优化的跨平台原生终端应用，支持 x86_64 与 aarch64（[官网](https://kero.sh) · [源码](https://github.com/egoist/kero)）
 - **[kiri-desktop-bin](https://aur.archlinux.org/packages/kiri-desktop-bin)** - Kiri 容器运行时完整版：无需 VM、直接用宿主内核跑容器并提供 Docker API（含 GUI 与自带 docker CLI/Compose/buildx，支持 x86_64 与 aarch64）（[官网](https://runkiri.com) · [源码](https://github.com/libracoder/kiri)）
