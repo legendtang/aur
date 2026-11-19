@@ -52,6 +52,7 @@
 - **[ely-table-app-bin](https://aur.archlinux.org/packages/ely-table-app-bin)** - Ely Office 文档套件：ElyTable 电子表格（[官网](https://office.elygpui.com) · [发布](https://github.com/ELY-Open-Source/ElyOffice)）
 - **[ely-tree-app-bin](https://aur.archlinux.org/packages/ely-tree-app-bin)** - Ely Office 文档套件：ElyTree 文件树与文档管理（[官网](https://office.elygpui.com) · [发布](https://github.com/ELY-Open-Source/ElyOffice)）
 - **[fizzy-cli-bin](https://aur.archlinux.org/packages/fizzy-cli-bin)** - Fizzy 命令行客户端，可从终端或 AI Agent 管理看板、卡片、评论和任务（[官网](https://fizzy.do) · [源码](https://github.com/basecamp/fizzy-cli)）
+- **[finch-bin](https://aur.archlinux.org/packages/finch-bin)** - Finch 桌面端：Finch agent 平台的桌面客户端，带跨会话记忆、技能与 mini tools，官方 deb 打包，Electron 应用，仅 x86_64（[发布](https://github.com/finchtoys/finch-releases)）
 - **[geetree-bin](https://aur.archlinux.org/packages/geetree-bin)** - GeeTree：GPU 渲染的专业 Git 客户端，用 Rust + GPUI 编写，针对超大仓库优化（百万提交秒开），含并排 diff、三方合并、交互式 rebase、worktree、内置终端；闭源免费（[官网](https://geetree.app) · [发布](https://github.com/cmzy/geetree)）
 - **[gortex-bin](https://aur.archlinux.org/packages/gortex-bin)** - Gortex：面向 AI agent 与 IDE 的高性能代码智能引擎，把仓库索引成知识图谱，支持 CLI、MCP Server 与 API（[官网](https://gortex.dev) · [源码](https://github.com/zzet/gortex)）
 - **[hatoba-bin](https://aur.archlinux.org/packages/hatoba-bin)** - 开源桌面 SSH 客户端，内置 AI 助手，通过自建 Cloudflare Worker 实现端到端加密同步（[官网](https://hatoba.fog.moe) · [源码](https://github.com/scarletkc/Hatoba)）
