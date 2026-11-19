@@ -1,0 +1,49 @@
+# Maintainer: czyt <czytcn@gmail.com>
+pkgname=universal-android-debloater-ng-bin
+pkgver=1.3.1
+pkgrel=1
+pkgdesc="Cross-platform GUI written in Rust using ADB to debloat non-rooted Android devices"
+arch=('x86_64')
+url="https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation"
+license=('GPL-3.0-or-later')
+depends=('android-tools' 'gcc-libs' 'glibc')
+# The program is called uad-ng, the same name the other packages of this
+# upstream install, so only one of them can be present at a time.
+provides=('uad-ng' 'universal-android-debloater-ng')
+conflicts=('uad-ng' 'universal-android-debloater-ng' 'universal-android-debloater' 'universal-android-debloater-bin')
+# A finished Rust build: stripping it would rewrite upstream's binary for no
+# gain, and a debug package would be just as large.
+options=('!strip' '!debug')
+
+_archive="uad-ng-linux.tar.gz"
+_releases="https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation"
+_source="https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation"
+
+source=("${_archive}::${_releases}/releases/download/v${pkgver}/${_archive}"
+        "${_archive}-checksum::${_releases}/releases/download/v${pkgver}/${_archive}-checksum"
+        "LICENSE::${_source}/v${pkgver}/LICENSE"
+        "logo-dark.png::${_source}/v${pkgver}/resources/assets/logo-dark.png")
+noextract=("${_archive}")
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+    # The archive holds one file: the program itself.
+    bsdtar -xOf "${srcdir}/${_archive}" uad-ng-linux > "${srcdir}/uad-ng-linux"
+    install -Dm755 "${srcdir}/uad-ng-linux" "${pkgdir}/usr/bin/uad-ng"
+
+    install -Dm644 "${srcdir}/logo-dark.png" "${pkgdir}/usr/share/pixmaps/uad-ng.png"
+    install -d "${pkgdir}/usr/share/applications"
+    cat > "${pkgdir}/usr/share/applications/uad-ng.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Universal Android Debloater Next Generation
+Comment=Debloat non-rooted Android devices over ADB
+Exec=uad-ng
+Icon=uad-ng
+Terminal=false
+StartupWMClass=uad-ng
+Categories=System;
+EOF
+
+    install -Dm644 "${srcdir}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
