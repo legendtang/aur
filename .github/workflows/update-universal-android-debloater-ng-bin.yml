@@ -121,7 +121,7 @@ jobs:
           [ "$listing" = "uad-ng-linux" ] ||
             fail "$ARCHIVE holds '$listing', expected uad-ng-linux"
 
-          bsdtar -xOf "$work/$ARCHIVE" uad-ng-linux > "$work/uad-ng-linux"
+          tar -xzOf "$work/$ARCHIVE" uad-ng-linux > "$work/uad-ng-linux"
           # LC_ALL=C keeps the header readable on any runner locale.
           header=$(LC_ALL=C readelf -h "$work/uad-ng-linux")
           grep -q "Machine:.*X86-64" <<<"$header" ||

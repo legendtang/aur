@@ -28,7 +28,7 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
     # The archive holds one file: the program itself.
-    bsdtar -xOf "${srcdir}/${_archive}" uad-ng-linux > "${srcdir}/uad-ng-linux"
+    tar -xzOf "${srcdir}/${_archive}" uad-ng-linux > "${srcdir}/uad-ng-linux"
     install -Dm755 "${srcdir}/uad-ng-linux" "${pkgdir}/usr/bin/uad-ng"
 
     install -Dm644 "${srcdir}/logo-dark.png" "${pkgdir}/usr/share/pixmaps/uad-ng.png"
