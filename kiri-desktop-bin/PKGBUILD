@@ -1,7 +1,7 @@
 # Maintainer: czyt <czytcn@gmail.com>
 
 pkgname=kiri-desktop-bin
-pkgver=0.2.1
+pkgver=0.2.2
 pkgrel=1
 pkgdesc="Tiny, fast container runtime speaking the Docker API (with GUI and bundled docker CLI, Compose, buildx)"
 arch=('x86_64' 'aarch64')
