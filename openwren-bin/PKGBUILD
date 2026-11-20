@@ -1,7 +1,7 @@
 # Maintainer: czyt <czytcn@gmail.com>
 
 pkgname=openwren-bin
-pkgver=0.1.11
+pkgver=0.1.12
 pkgrel=1
 pkgdesc="Privacy-first mail app for Gmail and any IMAP account: mail stays in an encrypted database on your own computer, trackers are stripped and suspicious messages are flagged"
 arch=('x86_64')

@@ -1,0 +1,283 @@
+name: Update creabim-bin Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number (e.g., 1.1.1). Leave empty to use the latest stable GitHub release."
+        required: false
+        type: string
+      force:
+        description: "Force a packaging-only pkgrel bump"
+        required: false
+        default: false
+        type: boolean
+      allow_downgrade:
+        description: "Allow an explicitly requested version downgrade"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 */12 * * *"
+
+concurrency:
+  group: aur-creabim-bin
+  cancel-in-progress: false
+
+jobs:
+  update-pkgbuild:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve and verify GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          fail() { echo "$1" >&2; exit 1; }
+
+          if [[ -n "$INPUT_VERSION" ]]; then
+            VERSION="${INPUT_VERSION#v}"
+            API_URL="https://api.github.com/repos/chopinregis/CreaBIM/releases/tags/v${VERSION}"
+          else
+            API_URL='https://api.github.com/repos/chopinregis/CreaBIM/releases/latest'
+          fi
+
+          release=$(curl --fail --silent --show-error --location \
+            --retry 3 --retry-all-errors --retry-delay 2 \
+            --connect-timeout 15 --max-time 120 \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$API_URL") || fail "Could not read the release from GitHub"
+
+          TAG=$(jq -er '.tag_name | strings | select(length > 1)' <<<"$release") ||
+            fail "Release has no tag name"
+          VERSION="${TAG#v}"
+          [[ "$TAG" == "v${VERSION}" && "$VERSION" =~ ^[0-9]+([.][0-9]+)+$ ]] ||
+            fail "Unsupported release tag: $TAG"
+          jq -e '.draft == false and .prerelease == false' <<<"$release" >/dev/null ||
+            fail "Release $TAG is a draft or a prerelease"
+
+          # Upstream also ships an rpm, a tarball and the Windows and macOS
+          # builds. Exactly one Linux deb may exist, and its name carries the
+          # build date, which the PKGBUILD needs: the download URL cannot be
+          # derived from the version alone.
+          mapfile -t debs < <(
+            jq -r '.assets[].name | select(test("-linux-x64\\.deb$"))' <<<"$release"
+          )
+          [ "${#debs[@]}" -eq 1 ] ||
+            fail "Release $TAG carries ${#debs[@]} Linux debs, expected exactly 1"
+
+          DEB="${debs[0]}"
+          [[ "$DEB" =~ ^CreaBIM-([0-9]+([.][0-9]+)+)-([0-9]{4}-[0-9]{2}-[0-9]{2})-linux-x64[.]deb$ ]] ||
+            fail "Unexpected deb name: $DEB"
+          [ "${BASH_REMATCH[1]}" = "$VERSION" ] ||
+            fail "Deb $DEB does not carry release version $VERSION"
+          RELEASE_DATE="${BASH_REMATCH[3]}"
+
+          digest=$(jq -r --arg n "$DEB" '.assets[] | select(.name == $n) | .digest // ""' <<<"$release")
+          [[ "$digest" == sha256:* ]] || fail "Release $TAG does not carry $DEB"
+
+          work="$RUNNER_TEMP/creabim"
+          rm -rf "$work"
+          mkdir -p "$work"
+
+          for name in SHA256SUMS.txt "$DEB"; do
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 1200 \
+              "https://github.com/chopinregis/CreaBIM/releases/download/v${VERSION}/${name}" \
+              --output "$work/$name"
+          done
+
+          got=$(sha256sum "$work/$DEB" | cut -d' ' -f1)
+          [ "$got" = "${digest#sha256:}" ] ||
+            fail "Checksum mismatch for $DEB: got $got want ${digest#sha256:}"
+
+          # The release's own checksum list names every artefact; only the file
+          # this package uses is checked here.
+          ( cd "$work" && sha256sum --check --ignore-missing --status SHA256SUMS.txt ) ||
+            fail "$DEB does not match SHA256SUMS.txt"
+
+          deb_package=$(dpkg-deb --field "$work/$DEB" Package)
+          deb_version=$(dpkg-deb --field "$work/$DEB" Version)
+          deb_arch=$(dpkg-deb --field "$work/$DEB" Architecture)
+          [ "$deb_package" = "creabim" ] ||
+            fail "$DEB carries Package $deb_package, expected creabim"
+          [ "$deb_version" = "$VERSION" ] ||
+            fail "$DEB carries Version $deb_version, expected $VERSION"
+          [ "$deb_arch" = "amd64" ] ||
+            fail "$DEB carries Architecture $deb_arch, expected amd64"
+
+          # Read the listing in full first: piping into `grep -q` would kill
+          # dpkg-deb with SIGPIPE, which pipefail then reports as a failure.
+          contents=$(dpkg-deb --contents "$work/$DEB")
+          for path in usr/bin/creabim usr/bin/creabim-cli \
+                      usr/share/applications/creabim.desktop \
+                      usr/share/icons/hicolor/512x512/apps/creabim.png; do
+            grep -qE "(^| )(\\./)?${path}( -> .*)?$" <<<"$contents" ||
+              fail "$DEB does not install $path"
+          done
+
+          # Unpack and run it: both programs have to be x86-64 executables, and
+          # the command-line tool has to produce the starter model. It needs no
+          # display for that.
+          mkdir -p "$work/payload"
+          dpkg-deb --fsys-tarfile "$work/$DEB" | tar -x -C "$work/payload"
+          for name in creabim creabim-cli; do
+            # LC_ALL=C keeps the header readable on any runner locale.
+            header=$(LC_ALL=C readelf -h "$work/payload/usr/bin/$name")
+            grep -q "Machine:.*X86-64" <<<"$header" ||
+              fail "The packaged $name is not an x86-64 executable"
+          done
+
+          "$work/payload/usr/bin/creabim-cli" sample "$work/house.creabim" ||
+            fail "The packaged creabim-cli does not run"
+          [ -s "$work/house.creabim" ] ||
+            fail "The packaged creabim-cli wrote no starter model"
+
+          echo "verified $DEB ($deb_version, $deb_arch, built $RELEASE_DATE)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "date=$RELEASE_DATE" >> "$GITHUB_OUTPUT"
+
+      - name: Compare release with PKGBUILD
+        id: compare
+        env:
+          ALLOW_DOWNGRADE: ${{ inputs.allow_downgrade }}
+          FORCE_UPDATE: ${{ inputs.force }}
+          LATEST_VERSION: ${{ steps.release.outputs.version }}
+          LATEST_DATE: ${{ steps.release.outputs.date }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          CURRENT_VERSION=$(sed -n 's/^pkgver=//p' creabim-bin/PKGBUILD)
+          [[ -n "$CURRENT_VERSION" ]] || { echo 'PKGBUILD has no pkgver' >&2; exit 1; }
+          CURRENT_REL=$(sed -n 's/^pkgrel=//p' creabim-bin/PKGBUILD)
+          [[ -n "$CURRENT_REL" ]] || { echo 'PKGBUILD has no pkgrel' >&2; exit 1; }
+          CURRENT_DATE=$(sed -n 's/^_date=//p' creabim-bin/PKGBUILD)
+          [[ -n "$CURRENT_DATE" ]] || { echo 'PKGBUILD has no _date' >&2; exit 1; }
+
+          # Compare against what AUR actually serves: a run whose publication
+          # failed after the GitHub copy moved on must be retried, not skipped
+          # as "already up to date".
+          AUR_VERSION=$(
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 120 \
+              "https://aur.archlinux.org/rpc/?v=5&type=info&arg=creabim-bin" |
+              jq -er 'if .resultcount == 0 then "" else .results[0].Version end'
+          )
+          AHEAD_REF="$LATEST_VERSION-$CURRENT_REL"
+          if [[ -n "$AUR_VERSION" && "$AUR_VERSION" != "$AHEAD_REF" ]] && \
+             [ "$(printf '%s\n%s\n' "$AUR_VERSION" "$AHEAD_REF" | sort -V | head -n1)" = "$AHEAD_REF" ]; then
+            echo "AUR is ahead of the GitHub state; reconcile before publishing" >&2
+            exit 1
+          fi
+
+          NEEDS_UPDATE=false
+          BUMP_REL=false
+          if [[ "$LATEST_VERSION" == "$CURRENT_VERSION" ]]; then
+            if [[ "$LATEST_DATE" != "$CURRENT_DATE" ]]; then
+              # Same version, rebuilt by upstream: the source file differs, so
+              # the package gets a new release of its own.
+              NEEDS_UPDATE=true
+              BUMP_REL=true
+              echo "Upstream rebuilt $LATEST_VERSION on $LATEST_DATE"
+            elif [[ "$FORCE_UPDATE" == true ]]; then
+              NEEDS_UPDATE=true
+              BUMP_REL=true
+            elif [[ "$AUR_VERSION" != "$CURRENT_VERSION-$CURRENT_REL" ]]; then
+              # Also the first publication, when AUR has no such package yet.
+              NEEDS_UPDATE=true
+              echo "Publishing the existing package state to AUR"
+            fi
+          else
+            OLDEST_VERSION=$(printf '%s\n%s\n' "$CURRENT_VERSION" "$LATEST_VERSION" | sort -V | head -n1)
+            if [[ "$OLDEST_VERSION" != "$CURRENT_VERSION" ]]; then
+              [[ -n "$REQUESTED_VERSION" && "$ALLOW_DOWNGRADE" == true ]] || {
+                echo "Refusing downgrade from $CURRENT_VERSION to $LATEST_VERSION" >&2
+                exit 1
+              }
+            fi
+            NEEDS_UPDATE=true
+          fi
+
+          echo "needs_update=$NEEDS_UPDATE" >> "$GITHUB_OUTPUT"
+          echo "bump_rel=$BUMP_REL" >> "$GITHUB_OUTPUT"
+
+      - name: Update PKGBUILD
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          BUMP_REL: ${{ steps.compare.outputs.bump_rel }}
+          LATEST_VERSION: ${{ steps.release.outputs.version }}
+          LATEST_DATE: ${{ steps.release.outputs.date }}
+        run: |
+          set -euo pipefail
+          cd creabim-bin
+
+          # The download URL is built from pkgver and the build date.
+          if [[ "$BUMP_REL" == true ]]; then
+            CURRENT_REL=$(sed -n 's/^pkgrel=//p' PKGBUILD)
+            [[ "$CURRENT_REL" =~ ^[0-9]+$ ]] || { echo "Invalid pkgrel: $CURRENT_REL" >&2; exit 1; }
+            sed -i "s/^pkgrel=.*/pkgrel=$((CURRENT_REL + 1))/" PKGBUILD
+          else
+            sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
+            sed -i 's/^pkgrel=.*/pkgrel=1/' PKGBUILD
+          fi
+          sed -i "s/^_date=.*/_date=$LATEST_DATE/" PKGBUILD
+
+          grep -qxF "pkgver=$LATEST_VERSION" PKGBUILD || {
+            echo "Failed to write pkgver=$LATEST_VERSION" >&2
+            exit 1
+          }
+          grep -qxF "_date=$LATEST_DATE" PKGBUILD || {
+            echo "Failed to write _date=$LATEST_DATE" >&2
+            exit 1
+          }
+
+      - name: Publish to AUR
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
+        with:
+          pkgname: creabim-bin
+          pkgbuild: ./creabim-bin/PKGBUILD
+          updpkgsums: true
+          post_process: bash /github/workspace/.github/scripts/prune-aur-workdir.sh .
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: ${{ steps.compare.outputs.bump_rel == 'true' && format('Bump pkgrel for version {0}', steps.release.outputs.version) || format('Update to version {0}', steps.release.outputs.version) }}
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+
+      - name: Commit successfully published version to GitHub
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          BUMP_REL: ${{ steps.compare.outputs.bump_rel }}
+          LATEST_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add creabim-bin/PKGBUILD
+          # Publishing the state GitHub already has changes nothing here.
+          if git diff --cached --quiet; then
+            echo "AUR publication required no GitHub metadata change."
+            exit 0
+          fi
+          if [[ "$BUMP_REL" == true ]]; then
+            git commit -m "Bump pkgrel for creabim-bin $LATEST_VERSION"
+          else
+            git commit -m "Update creabim-bin to version $LATEST_VERSION"
+          fi
+          git pull --rebase origin main
+          git push

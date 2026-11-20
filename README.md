@@ -4,6 +4,7 @@
 
 ## 包含的软件包
 
+- **[agent-access-bin](https://aur.archlinux.org/packages/agent-access-bin)** - Bitwarden Agent Access：在远端 agent 或脚本与密码库之间建一条端到端加密的隧道，按需取单条凭据，用 `aac run` 直接注入环境变量，不必把整个密码库交出去；命令名 `aac`，仅 x86_64（[源码](https://github.com/bitwarden/agent-access)）
 - **[api-fox-bin](https://aur.archlinux.org/packages/api-fox-bin)** - Apifox API 文档、调试、Mock 与自动化测试工具（[官网](https://apifox.com)）
 - **[astrlink-bin](https://aur.archlinux.org/packages/astrlink-bin)** - 给 AI Agent 用的本地隐私网关：请求发出前在本机检测敏感内容，支持 Codex、Claude、Grok 等订阅与主流厂商 API（[官网](https://astrlink.com) · [源码](https://github.com/Calcium-Ion/AstrLink)）
 - **[autocli-bin](https://aur.archlinux.org/packages/autocli-bin)** - Blazing fast, memory-safe CLI tool for fetching information from websites ([主页](https://github.com/nashsu/AutoCLI))
@@ -25,6 +26,7 @@
 - **[clauge-bin](https://aur.archlinux.org/packages/clauge-bin)** - One window. Every dev tool. ([主页](https://clauge.in))
 - **[codiff-bin](https://aur.archlinux.org/packages/codiff-bin)** - A beautiful, minimal, local diff viewer for reviewing staged and unstaged Git changes before committing ([主页](https://github.com/nkzw-tech/codiff))
 - **[confirmo-bin](https://aur.archlinux.org/packages/confirmo-bin)** - Your AI coding companion that lives on your desktop ([主页](https://confirmo.love))
+- **[creabim-bin](https://aur.archlinux.org/packages/creabim-bin)** - CreaBIM：免费开源的 BIM 建模软件，一个模型同时出三维视图、平面、剖面、立面、图纸、明细表、工程量和 IFC，另带 `creabim-cli` 命令行导出工具；离线可用，仅 x86_64（[源码](https://github.com/chopinregis/CreaBIM)）
 - **[crossbow-bin](https://aur.archlinux.org/packages/crossbow-bin)** - Crossbow：基于 mihomo 内核的代理客户端，Tauri 桌面界面，支持显式代理与 TUN 模式，安装后运行 `crossbow`（[源码](https://github.com/Richard-Zhang1019/Crossbow)）
 - **[cumora-bin](https://aur.archlinux.org/packages/cumora-bin)** - A workspace where AI teammates live, not visit. ([主页](https://cumora.ai))
 - **[dbx-bin](https://aur.archlinux.org/packages/dbx-bin)** - Open-source, lightweight, cross-platform database client (Tauri 2) ([主页](https://github.com/t8y2/dbx))
@@ -50,7 +52,9 @@
 - **[ely-table-app-bin](https://aur.archlinux.org/packages/ely-table-app-bin)** - Ely Office 文档套件：ElyTable 电子表格（[官网](https://office.elygpui.com) · [发布](https://github.com/ELY-Open-Source/ElyOffice)）
 - **[ely-tree-app-bin](https://aur.archlinux.org/packages/ely-tree-app-bin)** - Ely Office 文档套件：ElyTree 文件树与文档管理（[官网](https://office.elygpui.com) · [发布](https://github.com/ELY-Open-Source/ElyOffice)）
 - **[fizzy-cli-bin](https://aur.archlinux.org/packages/fizzy-cli-bin)** - Fizzy 命令行客户端，可从终端或 AI Agent 管理看板、卡片、评论和任务（[官网](https://fizzy.do) · [源码](https://github.com/basecamp/fizzy-cli)）
+- **[finch-bin](https://aur.archlinux.org/packages/finch-bin)** - Finch 桌面端：Finch agent 平台的桌面客户端，带跨会话记忆、技能与 mini tools，官方 deb 打包，Electron 应用，仅 x86_64（[发布](https://github.com/finchtoys/finch-releases)）
 - **[geetree-bin](https://aur.archlinux.org/packages/geetree-bin)** - GeeTree：GPU 渲染的专业 Git 客户端，用 Rust + GPUI 编写，针对超大仓库优化（百万提交秒开），含并排 diff、三方合并、交互式 rebase、worktree、内置终端；闭源免费（[官网](https://geetree.app) · [发布](https://github.com/cmzy/geetree)）
+- **[gitea-cli-bin](https://aur.archlinux.org/packages/gitea-cli-bin)** - Gitea 官方命令行工具 `gt`：在终端里管理仓库、Issue、PR、Release 与 Actions，静态 Go 二进制，双架构加 32 位 ARM（[官网](https://gitea.com/gitea/cli)）
 - **[gortex-bin](https://aur.archlinux.org/packages/gortex-bin)** - Gortex：面向 AI agent 与 IDE 的高性能代码智能引擎，把仓库索引成知识图谱，支持 CLI、MCP Server 与 API（[官网](https://gortex.dev) · [源码](https://github.com/zzet/gortex)）
 - **[hatoba-bin](https://aur.archlinux.org/packages/hatoba-bin)** - 开源桌面 SSH 客户端，内置 AI 助手，通过自建 Cloudflare Worker 实现端到端加密同步（[官网](https://hatoba.fog.moe) · [源码](https://github.com/scarletkc/Hatoba)）
 - **[hc-bin](https://aur.archlinux.org/packages/hc-bin)** - herdr-core（hc）：保持 Herdr 终端与编码代理持续运行的后台服务，静态链接、开箱即用（[官网](https://herdr.dev/core/) · [源码](https://github.com/herdrdev/herdr-core) · [说明](hc-bin/README.md)）
@@ -58,12 +62,14 @@
 - **[herdr-app-desktop-bin](https://aur.archlinux.org/packages/herdr-app-desktop-bin)** - Herdr 桌面应用：让终端与编码代理持续运行的本地工作台（[官网](https://herdr.dev) · [源码](https://github.com/herdrdev/herdr-app) · [说明](herdr-app-desktop-bin/README.md)）
 - **[herdr-bin](https://aur.archlinux.org/packages/herdr-bin)** - Supervise multiple coding agents in one terminal ([主页](https://github.com/ogulcancelik/herdr))
 - **[iris-screenshot-bin](https://aur.archlinux.org/packages/iris-screenshot-bin)** - Screenshots of live websites. Minimal interface, powerful engine. ([主页](https://github.com/brijr/iris))
+- **[kander-bin](https://aur.archlinux.org/packages/kander-bin)** - Kander：给多个 AI 编码 agent 排班的看板，规则驱动、带独立评审关卡，用 git worktree 隔离每个 agent 的工作区，静态 Go 二进制，x86_64 与 aarch64（[源码](https://github.com/dualface/kander)）
 - **[karing-bin](https://aur.archlinux.org/packages/karing-bin)** - Simple & Powerful proxy utility ([主页](https://github.com/KaringX/karing))
 - **[kero-bin](https://aur.archlinux.org/packages/kero-bin)** - 为 agent 优化的跨平台原生终端应用，支持 x86_64 与 aarch64（[官网](https://kero.sh) · [源码](https://github.com/egoist/kero)）
 - **[kiri-desktop-bin](https://aur.archlinux.org/packages/kiri-desktop-bin)** - Kiri 容器运行时完整版：无需 VM、直接用宿主内核跑容器并提供 Docker API（含 GUI 与自带 docker CLI/Compose/buildx，支持 x86_64 与 aarch64）（[官网](https://runkiri.com) · [源码](https://github.com/libracoder/kiri)）
 - **[kiri-desktop-lite-bin](https://aur.archlinux.org/packages/kiri-desktop-lite-bin)** - Kiri 容器运行时纯引擎版：Docker API on `/run/kiri/docker.sock`，无 GUI 无自带 CLI（[官网](https://runkiri.com) · [源码](https://github.com/libracoder/kiri)）
 - **[kudu-app-bin](https://aur.archlinux.org/packages/kudu-app-bin)** - Free Windows, Mac and Linux cleaner, scanner, and more. ([主页](https://github.com/AdventDevInc/kudu))
 - **[lig-bin](https://aur.archlinux.org/packages/lig-bin)** - 终端里的 IDE 式自动补全：边输入边在光标下方弹出子命令、选项、分支、包名与路径提示，支持 zsh、bash、fish；静态二进制，装完运行 `lig install` 接入你的 shell（[主页](https://github.com/KevenGoncalves/lig)）
+- **[linger-bin](https://aur.archlinux.org/packages/linger-bin)** - Linger：跑在本机上的个人 AI agent，内置本地模型，把邮件、聊天和会议变成共享记忆；首次启动会自己装好 Postgres、Node 等运行组件，Electron 桌面应用，仅 x86_64（[源码](https://github.com/simplexai-labs/linger)）
 - **[little-snitch-bin](https://aur.archlinux.org/packages/little-snitch-bin)** - Little Snitch informs you whenever a program attempts to establish an outgoing Internet connection ([主页](https://obdev.at/products/littlesnitch))
 - **[llmux-bin](https://aur.archlinux.org/packages/llmux-bin)** - Multi-provider, multi-account Claude proxy with automatic quota-based rotation ([主页](https://github.com/2lab-ai/llmux))
 - **[lnav-bin](https://aur.archlinux.org/packages/lnav-bin)** - 终端日志查看与分析工具，支持多文件合并、语法高亮和 SQL 查询；使用上游静态 musl 二进制，支持 x86_64 和 aarch64（[主页](https://github.com/tstack/lnav)）
@@ -74,6 +80,7 @@
 - **[magpie-bin](https://aur.archlinux.org/packages/magpie-bin)** - 一个地方管理所有 AI 编程 agent 的模型：为 Codex、Claude Code、Gemini CLI 等统一切换供应商与模型，支持 x86_64 和 aarch64（[官网](https://usemagpie.ai) · [源码](https://github.com/yetone/magpie)）
 - **[magpie-cli-bin](https://aur.archlinux.org/packages/magpie-cli-bin)** - magpie 的纯终端构建：静态二进制、不依赖 WebKitGTK/GTK3，命令为 `magpie-cli`，可与 magpie-bin 共存（[官网](https://usemagpie.ai)）
 - **[memoh-bin](https://aur.archlinux.org/packages/memoh-bin)** - Give your agent a cloud computer：云端优先的多智能体平台，每个 agent 拥有自己的桌面、文件与网络，24/7 运行（[官网](https://memoh.ai)）
+- **[mingle-bin](https://aur.archlinux.org/packages/mingle-bin)** - Mingle：把你的 AI 搭档带进常用的聊天软件（Discord、飞书、钉钉、Slack、Telegram、微信等），全部在本机运行、不需要服务器；托盘常驻，带命令历史与 MCP 接口；x86_64 与 aarch64（[源码](https://github.com/earayu/Mingle)）
 - **[minke-bin](https://aur.archlinux.org/packages/minke-bin)** - Minke desktop agent powered by DeepSeek Harness（[主页](https://github.com/lencx/Minke)）
 - **[mygo-cloudmusic-bin](https://aur.archlinux.org/packages/mygo-cloudmusic-bin)** - MyGo 云音乐：第三方网易云音乐原生客户端，双架构（[官网](https://music.egoist.dev) · [源码](https://github.com/egoist/mygo-cloudmusic)）
 - **[mygo-music-bin](https://aur.archlinux.org/packages/mygo-music-bin)** - 原生音乐播放器，界面基于 WebView，支持插件扩展与 ALSA / PulseAudio 输出，提供 x86_64 与 aarch64（[主页](https://github.com/egoist/mygo-music)）
@@ -121,8 +128,10 @@
 - **[thinkrail-bin](https://aur.archlinux.org/packages/thinkrail-bin)** - Vibe code with pi in a lightweight, real IDE - The Vibe You Need ([官网](https://thinkrail.ai) · [源码](https://github.com/JetBrains/thinkrail))
 - **[tty7-bin](https://aur.archlinux.org/packages/tty7-bin)** - A terminal workbench in pure Rust: shells, persistent sessions, SSH, coding agents ([主页](https://github.com/l0ng-ai/tty7))
 - **[tunnix-bin](https://aur.archlinux.org/packages/tunnix-bin)** - An encrypted SOCKS5/HTTP proxy tunnel over HTTP/SSE ([主页](https://github.com/aeroxy/tunnix))
+- **[universal-android-debloater-ng-bin](https://aur.archlinux.org/packages/universal-android-debloater-ng-bin)** - Universal Android Debloater Next Generation：用 ADB 给非 root 的安卓手机减负的图形界面，Rust 编写，官方发布版打包，仅 x86_64（[源码](https://github.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation)）
 - **[uu-remote-bin](https://aur.archlinux.org/packages/uu-remote-bin)** - 非官方 UU 远程 Linux 被控端：扫码登录后用官方 Mac/Windows/手机客户端远程控制 Linux 桌面，支持 H.264 远控、文件传输、终端与剪贴板（[主页](https://github.com/VallierDev/uu-remote-linux)）
 - **[uniclipboard-bin](https://aur.archlinux.org/packages/uniclipboard-bin)** - Real-time clipboard sync across macOS, Windows and Linux — local-first, peer-to-peer, and end-to-end encrypted ([主页](https://www.uniclipboard.app))
+- **[unifyterm-bin](https://aur.archlinux.org/packages/unifyterm-bin)** - UnifyTerm：一个终端打通 Windows、macOS 与 Linux，随程序附带 114 个 Unix 命令（ut）、边输入边搜索的命令历史，还能在终端里看图片、播放视频、渲染 Markdown；仅 x86_64（[源码](https://github.com/newdee/unifyterm)）
 - **[velotype-bin](https://aur.archlinux.org/packages/velotype-bin)** - Write at the speed of thought - high-performance native Markdown editor built with Rust and GPUI ([主页](https://github.com/manyougz/velotype))
 - **[veet-bin](https://aur.archlinux.org/packages/veet-bin)** - Universal Linux Application Uninstaller & Deep-Clean Residual Purger，深度清理各类残留的通用 Linux 应用卸载器（[主页](https://github.com/swadhinbiswas/veet)）
 - **[virtualhere-client-bin](https://aur.archlinux.org/packages/virtualhere-client-bin)** - VirtualHere USB Client - share USB devices over the network ([主页](https://www.virtualhere.com/usb_server_software))
