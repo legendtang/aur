@@ -1,0 +1,291 @@
+name: Update mingle-bin Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number (e.g., 0.4.5). Leave empty to use the latest stable GitHub release."
+        required: false
+        type: string
+      force:
+        description: "Force a packaging-only pkgrel bump"
+        required: false
+        default: false
+        type: boolean
+      allow_downgrade:
+        description: "Allow an explicitly requested version downgrade"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "41 */12 * * *"
+
+concurrency:
+  group: aur-mingle-bin
+  cancel-in-progress: false
+
+jobs:
+  update-pkgbuild:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve and verify GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          fail() { echo "$1" >&2; exit 1; }
+
+          if [[ -n "${INPUT_VERSION:-}" ]]; then
+            VERSION="${INPUT_VERSION#v}"
+            [[ "$VERSION" =~ ^[0-9]+([.][0-9]+)+$ ]] || fail "Unsupported version: $VERSION"
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 120 \
+              --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              "https://api.github.com/repos/earayu/Mingle/releases/tags/v${VERSION}" \
+              --output release-raw.json ||
+              fail "Could not read release v${VERSION}"
+            jq -e '.draft == false' release-raw.json >/dev/null ||
+              fail "Release v${VERSION} is a draft"
+            jq '.' release-raw.json > release.json
+          else
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 120 \
+              --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              "https://api.github.com/repos/earayu/Mingle/releases?per_page=30" \
+              --output releases-raw.json ||
+              fail "Could not read the release list from GitHub"
+            jq -e 'type == "array" and ([.[] | select(.draft == false and .prerelease == false and (.tag_name | test("^v[0-9]+([.][0-9]+)+$")))] | length > 0)' \
+              releases-raw.json >/dev/null ||
+              fail "No stable release found"
+            jq '[.[] | select(.draft == false and .prerelease == false and (.tag_name | test("^v[0-9]+([.][0-9]+)+$")))]
+                | sort_by(.published_at) | reverse | .[0]' \
+              releases-raw.json > release.json
+          fi
+
+          TAG=$(jq -er '.tag_name | select(type == "string" and length > 0)' release.json)
+          DISCOVERED_VERSION=${TAG#v}
+          [[ -z "${INPUT_VERSION:-}" || "$DISCOVERED_VERSION" == "$VERSION" ]] ||
+            fail "Release tag $TAG does not match requested version $VERSION"
+          VERSION=$DISCOVERED_VERSION
+          [[ "$TAG" == "v${VERSION}" && "$VERSION" =~ ^[0-9]+([.][0-9]+)+$ ]] ||
+            fail "Unsupported release tag: $TAG"
+          jq -e '.draft == false and .prerelease == false' release.json >/dev/null ||
+            fail "Release $TAG is a draft or a prerelease"
+
+          # The release also carries the builds for macOS and Windows, an
+          # AppImage-free tarball, and the update files of the updater.
+          DEB_AMD64=$(jq -r '[.assets[] | select(.name | test("^mingle_[0-9].*_amd64\\.deb$"))]
+                          | if length == 1 then .[0].name else "" end' release.json)
+          DEB_ARM64=$(jq -r '[.assets[] | select(.name | test("^mingle_[0-9].*_arm64\\.deb$"))]
+                          | if length == 1 then .[0].name else "" end' release.json)
+          [[ -n "$DEB_AMD64" ]] || fail "Release $TAG has no single Debian package for amd64"
+          [[ -n "$DEB_ARM64" ]] || fail "Release $TAG has no single Debian package for arm64"
+          for name in "$DEB_AMD64" "$DEB_ARM64" SHA256SUMS; do
+            jq -e --arg n "$name" '.assets | any(.name == $n and .state == "uploaded" and .size > 0)' \
+              release.json >/dev/null || fail "Release $TAG has no usable $name"
+          done
+
+          work="$RUNNER_TEMP/mingle"
+          rm -rf "$work"
+          mkdir -p "$work"
+
+          for name in SHA256SUMS "$DEB_AMD64" "$DEB_ARM64"; do
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 1800 \
+              "https://github.com/earayu/Mingle/releases/download/${TAG}/${name}" \
+              --output "$work/$name" ||
+              fail "Could not download $name"
+          done
+
+          # The release carries a checksum list that covers every file.
+          ( cd "$work" && sha256sum --check --ignore-missing --status SHA256SUMS ) ||
+            fail "The downloaded files do not match SHA256SUMS"
+
+          for pair in "$DEB_AMD64:amd64:X86-64" "$DEB_ARM64:arm64:AArch64"; do
+            deb="${pair%%:*}"
+            rest="${pair#*:}"
+            architecture="${rest%%:*}"
+            machine="${rest##*:}"
+
+            digest=$(jq -r --arg n "$deb" '.assets[] | select(.name == $n) | .digest // ""' release.json)
+            [[ "$digest" == sha256:* ]] || fail "Release $TAG does not carry a digest for $deb"
+            got=$(sha256sum "$work/$deb" | cut -d' ' -f1)
+            [ "$got" = "${digest#sha256:}" ] ||
+              fail "Checksum mismatch for $deb: got $got want ${digest#sha256:}"
+
+            deb_package=$(dpkg-deb --field "$work/$deb" Package)
+            deb_version=$(dpkg-deb --field "$work/$deb" Version)
+            deb_arch=$(dpkg-deb --field "$work/$deb" Architecture)
+            [ "$deb_package" = "mingle" ] ||
+              fail "$deb carries Package $deb_package, expected mingle"
+            [ "$deb_version" = "$VERSION" ] ||
+              fail "$deb carries Version $deb_version, expected $VERSION"
+            [ "$deb_arch" = "$architecture" ] ||
+              fail "$deb carries Architecture $deb_arch, expected $architecture"
+            [ "$deb" = "mingle_${VERSION}_${architecture}.deb" ] ||
+              fail "$deb is not named after version $VERSION"
+
+            # Read the listing in full first: piping into `grep -q` would kill
+            # dpkg-deb with SIGPIPE, which pipefail then reports as a failure.
+            contents=$(dpkg-deb --contents "$work/$deb")
+            for path in opt/mingle/mingle opt/mingle/node/bin/node \
+                        opt/mingle/core/package.json opt/mingle/core/LICENSE \
+                        usr/share/applications/mingle.desktop \
+                        usr/share/icons/hicolor/256x256/apps/mingle.png \
+                        usr/share/icons/hicolor/512x512/apps/mingle.png; do
+              grep -qE "(^| )(\\./)?${path}( -> .*)?$" <<<"$contents" ||
+                fail "$deb does not install $path"
+            done
+
+            # Only the program and the file that holds the version are
+            # unpacked: the whole package is over three hundred megabytes.
+            mkdir -p "$work/payload/$architecture"
+            dpkg-deb --fsys-tarfile "$work/$deb" |
+              tar -x -C "$work/payload/$architecture" --wildcards \
+                '*/opt/mingle/mingle' '*/opt/mingle/core/package.json'
+
+            # LC_ALL=C keeps the header readable on any runner locale.
+            header=$(LC_ALL=C readelf -h "$work/payload/$architecture/opt/mingle/mingle")
+            grep -q "Machine:.*${machine}" <<<"$header" ||
+              fail "The program in $deb is not a $machine executable"
+
+            # The program carries the version of its own program file.
+            grep -qF "\"version\": \"$VERSION\"" \
+              "$work/payload/$architecture/opt/mingle/core/package.json" ||
+              fail "The program in $deb does not report version $VERSION"
+          done
+
+          echo "verified $DEB_AMD64 and $DEB_ARM64 (version $VERSION)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compare release with PKGBUILD
+        id: compare
+        env:
+          ALLOW_DOWNGRADE: ${{ inputs.allow_downgrade }}
+          FORCE_UPDATE: ${{ inputs.force }}
+          LATEST_VERSION: ${{ steps.release.outputs.version }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          CURRENT_VERSION=$(sed -n 's/^pkgver=//p' mingle-bin/PKGBUILD)
+          [[ -n "$CURRENT_VERSION" ]] || { echo 'PKGBUILD has no pkgver' >&2; exit 1; }
+          CURRENT_REL=$(sed -n 's/^pkgrel=//p' mingle-bin/PKGBUILD)
+          [[ -n "$CURRENT_REL" ]] || { echo 'PKGBUILD has no pkgrel' >&2; exit 1; }
+
+          # Compare against what AUR actually serves: a run whose publication
+          # failed after the GitHub copy moved on must be retried, not skipped
+          # as "already up to date".
+          AUR_VERSION=$(
+            curl --fail --silent --show-error --location \
+              --retry 3 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 15 --max-time 120 \
+              "https://aur.archlinux.org/rpc/?v=5&type=info&arg=mingle-bin" |
+              jq -er 'if .resultcount == 0 then "" else .results[0].Version end'
+          )
+          AHEAD_REF="$LATEST_VERSION-$CURRENT_REL"
+          if [[ -n "$AUR_VERSION" && "$AUR_VERSION" != "$AHEAD_REF" ]] && \
+             [ "$(printf '%s\n%s\n' "$AUR_VERSION" "$AHEAD_REF" | sort -V | sed -n '1p')" = "$AHEAD_REF" ]; then
+            echo "AUR is ahead of the GitHub state; reconcile before publishing" >&2
+            exit 1
+          fi
+
+          NEEDS_UPDATE=false
+          BUMP_REL=false
+          if [[ "$LATEST_VERSION" == "$CURRENT_VERSION" ]]; then
+            if [[ "$FORCE_UPDATE" == true ]]; then
+              NEEDS_UPDATE=true
+              BUMP_REL=true
+            elif [[ "$AUR_VERSION" != "$CURRENT_VERSION-$CURRENT_REL" ]]; then
+              # Also the first publication, when AUR has no such package yet.
+              NEEDS_UPDATE=true
+              echo "Publishing the existing package state to AUR"
+            fi
+          else
+            OLDEST_VERSION=$(printf '%s\n%s\n' "$CURRENT_VERSION" "$LATEST_VERSION" | sort -V | sed -n '1p')
+            if [[ "$OLDEST_VERSION" != "$CURRENT_VERSION" ]]; then
+              [[ -n "$REQUESTED_VERSION" && "$ALLOW_DOWNGRADE" == true ]] || {
+                echo "Refusing downgrade from $CURRENT_VERSION to $LATEST_VERSION" >&2
+                exit 1
+              }
+            fi
+            NEEDS_UPDATE=true
+          fi
+
+          echo "needs_update=$NEEDS_UPDATE" >> "$GITHUB_OUTPUT"
+          echo "bump_rel=$BUMP_REL" >> "$GITHUB_OUTPUT"
+
+      - name: Update PKGBUILD
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          BUMP_REL: ${{ steps.compare.outputs.bump_rel }}
+          LATEST_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd mingle-bin
+
+          # The tag, file names and source URLs all follow ${pkgver}.
+          if [[ "$BUMP_REL" == true ]]; then
+            CURRENT_REL=$(sed -n 's/^pkgrel=//p' PKGBUILD)
+            [[ "$CURRENT_REL" =~ ^[0-9]+$ ]] || { echo "Invalid pkgrel: $CURRENT_REL" >&2; exit 1; }
+            sed -i "s/^pkgrel=.*/pkgrel=$((CURRENT_REL + 1))/" PKGBUILD
+          else
+            sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
+            sed -i 's/^pkgrel=.*/pkgrel=1/' PKGBUILD
+          fi
+
+          grep -qxF "pkgver=$LATEST_VERSION" PKGBUILD || {
+            echo "Failed to write pkgver=$LATEST_VERSION" >&2
+            exit 1
+          }
+
+      - name: Publish to AUR
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
+        with:
+          pkgname: mingle-bin
+          pkgbuild: ./mingle-bin/PKGBUILD
+          updpkgsums: true
+          post_process: bash /github/workspace/.github/scripts/prune-aur-workdir.sh .
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: ${{ steps.compare.outputs.bump_rel == 'true' && format('Bump pkgrel for version {0}', steps.release.outputs.version) || format('Update to version {0}', steps.release.outputs.version) }}
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+
+      - name: Commit successfully published version to GitHub
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          BUMP_REL: ${{ steps.compare.outputs.bump_rel }}
+          LATEST_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add mingle-bin/PKGBUILD
+          # Publishing the state GitHub already has changes nothing here.
+          if git diff --cached --quiet; then
+            echo "AUR publication required no GitHub metadata change."
+            exit 0
+          fi
+          if [[ "$BUMP_REL" == true ]]; then
+            git commit -m "Bump pkgrel for mingle-bin $LATEST_VERSION"
+          else
+            git commit -m "Update mingle-bin to version $LATEST_VERSION"
+          fi
+          git pull --rebase origin main
+          git push

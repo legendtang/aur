@@ -80,6 +80,7 @@
 - **[magpie-bin](https://aur.archlinux.org/packages/magpie-bin)** - 一个地方管理所有 AI 编程 agent 的模型：为 Codex、Claude Code、Gemini CLI 等统一切换供应商与模型，支持 x86_64 和 aarch64（[官网](https://usemagpie.ai) · [源码](https://github.com/yetone/magpie)）
 - **[magpie-cli-bin](https://aur.archlinux.org/packages/magpie-cli-bin)** - magpie 的纯终端构建：静态二进制、不依赖 WebKitGTK/GTK3，命令为 `magpie-cli`，可与 magpie-bin 共存（[官网](https://usemagpie.ai)）
 - **[memoh-bin](https://aur.archlinux.org/packages/memoh-bin)** - Give your agent a cloud computer：云端优先的多智能体平台，每个 agent 拥有自己的桌面、文件与网络，24/7 运行（[官网](https://memoh.ai)）
+- **[mingle-bin](https://aur.archlinux.org/packages/mingle-bin)** - Mingle：把你的 AI 搭档带进常用的聊天软件（Discord、飞书、钉钉、Slack、Telegram、微信等），全部在本机运行、不需要服务器；托盘常驻，带命令历史与 MCP 接口；x86_64 与 aarch64（[源码](https://github.com/earayu/Mingle)）
 - **[minke-bin](https://aur.archlinux.org/packages/minke-bin)** - Minke desktop agent powered by DeepSeek Harness（[主页](https://github.com/lencx/Minke)）
 - **[mygo-cloudmusic-bin](https://aur.archlinux.org/packages/mygo-cloudmusic-bin)** - MyGo 云音乐：第三方网易云音乐原生客户端，双架构（[官网](https://music.egoist.dev) · [源码](https://github.com/egoist/mygo-cloudmusic)）
 - **[mygo-music-bin](https://aur.archlinux.org/packages/mygo-music-bin)** - 原生音乐播放器，界面基于 WebView，支持插件扩展与 ALSA / PulseAudio 输出，提供 x86_64 与 aarch64（[主页](https://github.com/egoist/mygo-music)）
